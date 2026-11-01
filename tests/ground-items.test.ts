@@ -55,5 +55,5 @@ test('v12 получает пустое размещение без потери
  const c=fixture(),{ground,...item}=c.items[0];
  const migrated=parseCampaign({...c,schemaVersion:12,session:{started:true,tacticalMovement:true},items:[item]});
  expect(migrated.items[0]).toEqual(c.items[0]);expect(migrated.session).toEqual({started:true,tacticalMovement:true});
- expect(migrated.schemaVersion).toBe(14);
+ expect(migrated.schemaVersion).toBe(15);
 });

@@ -1,3 +1,4 @@
+import {LevelSummary} from './LevelSummary.js';
 import React,{useEffect,useState} from 'react';
 import type {Campaign,Character} from '../shared/campaign.js';
 import {evaluateStats} from '../domain/rules/evaluate.js';
@@ -13,6 +14,7 @@ export function CharacterCard({campaign,character,onResource,onClose}:{campaign:
  <div className="card-heading"><h3>{character.name}</h3><button onClick={onClose} aria-label="Закрыть карточку персонажа">Закрыть</button></div>
  {character.portrait&&<img className="portrait-preview" src={character.portrait} alt="Портрет"/>}<p>{character.kind==='npc'?'NPC':'Персонаж'} · {character.footprint.width}×{character.footprint.height} клеток</p>
  {campaign.encounter&&<p>{currentActor(campaign)===character.id?'Сейчас его ход':campaign.encounter.participants.some(row=>row.characterId===character.id)?'Ожидает своего хода':'Не участвует в бою'}</p>}
+ <LevelSummary character={character} rules={campaign.ruleset}/>
  <h4>Текущие ресурсы</h4>
  {campaign.ruleset.healthStat?<ResourceControl key={`hp-${character.id}`} campaign={campaign} character={character} statKey={campaign.ruleset.healthStat} name="HP" onChange={onResource}/>:<p>Показатель HP не настроен. Выберите максимум HP в конфигураторе → «Правила».</p>}
  {campaign.ruleset.movement.budgetStat?<ResourceControl key={`ap-${character.id}`} campaign={campaign} character={character} statKey={campaign.ruleset.movement.budgetStat} name="ОД" onChange={onResource}/>:<p>Показатель ОД не настроен в правилах.</p>}
