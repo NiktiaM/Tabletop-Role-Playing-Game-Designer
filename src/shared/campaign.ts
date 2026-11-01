@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { annotationSchema } from './annotations.js';
 import { footprintFits, footprintsOverlap } from '../domain/tokens.js';
 const metadata = {
   id: z.uuid(), name: z.string().trim().min(1).max(120),
@@ -18,8 +19,15 @@ export const mapSchema = z.object({
   id: z.uuid(), name: z.string().trim().min(1).max(120),
   width: z.number().int().positive().max(8192), height: z.number().int().positive().max(8192),
   grid: gridSchema.default(defaultGrid),
+  annotations:z.array(annotationSchema).max(500).default([]),
   image: z.string().max(21 * 1024 * 1024).regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/),
-}).strict().refine(m => m.width * m.height <= 32_000_000, 'Карта должна содержать не более 32 млн пикселей');
+}).strict().refine(m => m.width * m.height <= 32_000_000, 'Карта должна содержать не более 32 млн пикселей').superRefine((map,ctx)=>{
+ if(new Set(map.annotations.map(item=>item.id)).size!==map.annotations.length)ctx.addIssue({code:'custom',message:'Повторяющиеся объекты разметки'});
+ for(const item of map.annotations){
+  const points=item.kind==='light'?[item.center]:[item.from,item.to];
+  if(points.some(p=>p.x>map.width||p.y>map.height))ctx.addIssue({code:'custom',message:'Разметка выходит за границы изображения'});
+ }
+});
 export const portraitSchema = z.string().max(2*1024*1024).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/);
 export const characterSchema = z.object({
  id:z.uuid(), name:z.string().trim().min(1).max(120), kind:z.enum(['character','npc']),
@@ -30,7 +38,7 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(5), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(6), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   const ids = new Set(c.maps.map(m => m.id));
@@ -51,10 +59,10 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 5, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 6, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4)) {
-    return campaignSchema.parse({ ...input, schemaVersion: 5 });
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5)) {
+    return campaignSchema.parse({ ...input, schemaVersion: 6 });
   }
   return campaignSchema.parse(input);
 }
@@ -71,5 +79,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 5, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 6, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }

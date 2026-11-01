@@ -97,7 +97,7 @@ try {
  await application.evaluate(({dialog}, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, path);
  await page.getByRole('button', {name:'Сохранить как…'}).click();
  await page.getByText('Все изменения сохранены', {exact:true}).waitFor();
- const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,5);
+ const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,6);
  assert.deepEqual(saved.maps[0].grid,{metersPerCell:1,locationKind:'custom',cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true});
  const savedCamera = saved.view.cameras[saved.view.activeMapId]; assert.ok(savedCamera.zoom > 0);
  await application.close(); console.log('Запуск Electron'); application = await launch(); page = await application.firstWindow();
@@ -206,6 +206,49 @@ try {
  await page.getByRole('button',{name:'Убрать токен: Алекс',exact:true}).first().click();await expect(page.getByRole('button',{name:'Токен: Алекс',exact:true})).toHaveCount(1);
  await page.getByRole('button',{name:'На карту: Алекс',exact:true}).waitFor();
  await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ console.log('Разметка: стены, зоны и свет');
+ await page.locator('.board').scrollIntoViewIfNeeded();const beforeAnnotations=await page.locator('.board').screenshot();
+ const drawAnnotation=async(kind,name)=>{
+  await page.getByLabel('Инструмент разметки').selectOption(kind);
+  await page.getByLabel('Название разметки').fill(name);
+  if(kind==='wall'){await page.getByLabel('Разрушаемая стена').check();await page.getByLabel('Прочность стены').fill('25');}
+  if(kind==='cover')await page.getByLabel('Степень укрытия').selectOption('medium');
+  if(kind==='elevation')await page.getByLabel('Высота зоны, м').fill('2.5');
+  if(kind==='liquid')await page.getByLabel('Тип жидкости').selectOption('acid');
+  await page.locator('.board').scrollIntoViewIfNeeded();const box=await page.locator('.board').boundingBox();
+  await page.mouse.click(box.x+box.width/2-55,box.y+box.height/2-35);
+  await page.mouse.click(box.x+box.width/2+55,box.y+box.height/2+35);
+  await page.getByRole('button',{name:'Добавить разметку',exact:true}).click();
+ };
+ await drawAnnotation('wall','Дверь');await drawAnnotation('cover','Ящики');await drawAnnotation('elevation','Балкон');await drawAnnotation('liquid','Кислота');await drawAnnotation('light','Лампа');
+ await expect(page.locator('[data-annotation]')).toHaveCount(5);
+ await page.getByLabel('Инструмент разметки').selectOption('select');
+ await page.locator('.annotations-overlay circle').click();
+ await expect(page.getByLabel('Название разметки')).toHaveValue('Лампа');
+ const afterAnnotations=await page.locator('.board').screenshot();assert.ok(!beforeAnnotations.equals(afterAnnotations),'Разметка должна менять изображение поля');
+ await page.getByRole('button',{name:'Скрыть разметку: Лампа',exact:true}).click();await expect(page.locator('[data-annotation]')).toHaveCount(4);
+ await page.getByRole('button',{name:'Показать разметку: Лампа',exact:true}).click();await expect(page.locator('[data-annotation]')).toHaveCount(5);
+ await page.getByRole('button',{name:'Дверь · Стена',exact:true}).click();
+ await page.getByLabel('Прочность стены').fill('30');await page.getByRole('button',{name:'Сохранить свойства',exact:true}).click();
+ const originalWallX=await page.locator('[data-annotation]').first().locator('line').first().getAttribute('x1');
+ await page.getByRole('button',{name:'Заменить геометрию двумя точками',exact:true}).click();
+ await page.locator('.board').scrollIntoViewIfNeeded();const editBox=await page.locator('.board').boundingBox();
+ await page.mouse.click(editBox.x+editBox.width/2-70,editBox.y+editBox.height/2-50);
+ await page.mouse.click(editBox.x+editBox.width/2+70,editBox.y+editBox.height/2+50);
+ await page.getByRole('button',{name:'Сохранить свойства',exact:true}).click();
+ await expect(page.locator('[data-annotation]').first().locator('line').first()).not.toHaveAttribute('x1',originalWallX);
+ await page.getByLabel('Текущая карта').selectOption({label:'Этаж.jpg'});await expect(page.locator('[data-annotation]')).toHaveCount(0);
+ await page.getByLabel('Текущая карта').selectOption({label:'План.png'});await expect(page.locator('[data-annotation]')).toHaveCount(5);
+ await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const marked=JSON.parse(await readFile(path,'utf8'));assert.equal(marked.maps[0].annotations.length,5);assert.equal(marked.maps[1].annotations.length,0);assert.equal(marked.maps[0].annotations[0].hp,30);
+ assert.equal(marked.maps[0].annotations[2].heightMeters,2.5);assert.equal(marked.maps[0].annotations[3].liquidType,'acid');
+ await application.close();application=await launch();page=await application.firstWindow();page.on('pageerror',error=>errors.push(error.message));
+ await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);
+ await page.getByRole('button',{name:'Открыть партию…'}).click();await expect(page.locator('[data-annotation]')).toHaveCount(5);
+ await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const markedReopened=JSON.parse(await readFile(path,'utf8'));assert.deepEqual(markedReopened.maps[0].annotations,marked.maps[0].annotations);assert.deepEqual(markedReopened.view,marked.view);
+ await page.getByRole('button',{name:'Лампа · Свет',exact:true}).click();await page.getByRole('button',{name:'Удалить выбранное',exact:true}).click();await expect(page.locator('[data-annotation]')).toHaveCount(4);
+ await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
  await writeFile(path, '{broken');
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
@@ -215,5 +258,5 @@ try {
  assert.equal(await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).count(),1);
  assert.deepEqual(errors,[]);
  await page.screenshot({path:join(temporary,'window.png')});
- console.log('PASS: каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
+ console.log('PASS: пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
 } finally { if(application) application.process().kill('SIGKILL'); await rm(temporary,{recursive:true,force:true}); }

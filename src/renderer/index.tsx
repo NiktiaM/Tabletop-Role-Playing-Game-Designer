@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { Campaign, CampaignAPI, Character } from '../shared/campaign.js';
 import './style.css';
 import { campaignSchema } from '../shared/campaign.js';
+import type { Annotation } from '../shared/annotations.js';
 import { Characters } from './Characters.js';
 import { GridControls } from './board/GridControls.js';
 import { Board } from './board/Board.js';
@@ -42,6 +43,9 @@ function App() {
   function updateGrid(grid: Grid) {
     if(campaign)commit({...campaign,maps:campaign.maps.map(map=>map.id===activeMap?.id?{...map,grid}:map)});
   }
+  function updateAnnotations(annotations:Annotation[]) {
+    return campaign?commit({...campaign,maps:campaign.maps.map(map=>map.id===activeMap?.id?{...map,annotations}:map)}):false;
+  }
   function addCharacter(character:Character) {
     if(campaign)commit({...campaign,characters:[...campaign.characters,character]},`Создан персонаж: ${character.name}`);
   }
@@ -72,9 +76,9 @@ function App() {
     <p className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /><Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /><Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section>}
-    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 5 · Данные остаются на вашем компьютере</footer>
+    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 6 · Данные остаются на вашем компьютере</footer>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
