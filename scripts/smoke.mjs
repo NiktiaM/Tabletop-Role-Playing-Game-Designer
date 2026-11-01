@@ -11,6 +11,7 @@ try {
  console.log('Запуск Electron'); application = await launch();
  let page = await application.firstWindow();
  await page.getByLabel('Название партии').waitFor();
+ assert.equal(await page.getByRole('tab').count(),0,'До выбора партии рабочие вкладки не отображаются');
  const cdp = await page.context().newCDPSession(page);
  const cspResult = await cdp.send('Runtime.evaluate', {expression: "(() => {try {Function('return 1')(); return false;} catch {return true;}})()", allowUnsafeEvalBlockedByCSP:false, returnByValue:true});
  assert.equal(cspResult.result.value,true,'CSP must forbid dynamic code generation');
@@ -19,6 +20,20 @@ try {
  await page.getByLabel('Название партии').fill('Побег из Лейквью');
  await page.getByRole('button', { name: 'Создать партию', exact: true }).click();
  await page.getByRole('heading', { name: 'Побег из Лейквью', exact: true }).waitFor();
+ assert.equal(await page.getByLabel('Название партии').count(),0,'Форма создания партии убрана из рабочего экрана');
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
+ await page.getByLabel('Имя персонажа').fill('Черновик');
+ await page.getByRole('tab',{name:'Карты',exact:true}).click();
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
+ await expect(page.getByLabel('Имя персонажа')).toHaveValue('Черновик');
+ await page.getByLabel('Имя персонажа').fill('');
+ await page.getByRole('tab',{name:'Карты',exact:true}).click();
+ // Refusing the warning keeps the unsaved party open.
+ await page.evaluate(()=>{window.__originalConfirm=window.confirm;window.confirm=()=>false;});
+ await page.getByRole('button',{name:'К выбору партии',exact:true}).click();
+ await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).waitFor();
+
+ await page.evaluate(()=>{window.confirm=window.__originalConfirm;delete window.__originalConfirm;});
  const pngPath = join(temporary, 'План.png'); const jpgPath = join(temporary, 'Этаж.jpg');
  console.log('Подготовка карт'); const fixtures = await application.evaluate(({nativeImage}) => {
    const bitmap = Buffer.alloc(4000*4000*4);
@@ -160,6 +175,7 @@ try {
  await page.getByLabel('Размер клетки, пикс.').fill('100');
  await page.getByLabel('Смещение X, пикс.').fill('0');await page.getByLabel('Смещение Y, пикс.').fill('0');
  await page.getByRole('button',{name:'Применить сетку'}).click();
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
  await page.getByLabel('Имя персонажа').fill('Алекс');await page.getByLabel('Ширина, клеток').fill('2');await page.getByLabel('Высота, клеток').fill('1');
  await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},pngPath);
  await page.getByRole('button',{name:'Выбрать портрет…'}).click();await page.getByAltText('Новый портрет').waitFor();
@@ -167,11 +183,13 @@ try {
  await page.getByRole('button',{name:'На карту: Алекс',exact:true}).waitFor();
  const cam=calibrated.view.cameras[calibrated.view.activeMapId];
  const placeAlex=async(column,row)=>{
+  await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
   await page.getByRole('button',{name:'На карту: Алекс',exact:true}).click();
   await page.getByRole('button',{name:'Отменить размещение'}).waitFor();
   await page.locator('.board').scrollIntoViewIfNeeded();const box=await page.locator('.board').boundingBox();
   await page.mouse.click(box.x+1+cam.x+(column+0.5)*100*cam.zoom,box.y+1+cam.y+(row+0.5)*100*cam.zoom);
  };
+ await page.getByRole('tab',{name:'Карты',exact:true}).click();
  await page.locator('.board').scrollIntoViewIfNeeded();const tokenBoard=await page.locator('.board').boundingBox();
  const column=Math.floor((tokenBoard.width/2-cam.x)/cam.zoom/100),row=Math.floor((tokenBoard.height/2-cam.y)/cam.zoom/100);
  await placeAlex(column,row);await expect(page.getByRole('button',{name:'Токен: Алекс',exact:true})).toHaveCount(1);
@@ -183,7 +201,9 @@ try {
  await placeAlex(column,row);await expect(page.getByRole('button',{name:'Токен: Алекс',exact:true})).toHaveCount(2);
  await page.getByLabel('Текущая карта').selectOption({label:'Этаж.jpg'});
  await expect(page.getByRole('button',{name:'Токен: Алекс',exact:true})).toHaveCount(0);
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
  await page.getByRole('button',{name:'На карту: Алекс',exact:true}).waitFor();
+ await page.getByRole('tab',{name:'Карты',exact:true}).click();
  await page.getByLabel('Текущая карта').selectOption({label:'План.png'});
  await expect(page.getByRole('button',{name:'Токен: Алекс',exact:true})).toHaveCount(2);
  await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
@@ -204,7 +224,9 @@ try {
  await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
  const tokensReopened=JSON.parse(await readFile(path,'utf8'));assert.deepEqual(tokensReopened.tokens,blocked.tokens);assert.deepEqual(tokensReopened.characters,blocked.characters);
  await page.getByRole('button',{name:'Убрать токен: Алекс',exact:true}).first().click();await expect(page.getByRole('button',{name:'Токен: Алекс',exact:true})).toHaveCount(1);
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
  await page.getByRole('button',{name:'На карту: Алекс',exact:true}).waitFor();
+ await page.getByRole('tab',{name:'Карты',exact:true}).click();
  await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
  console.log('Разметка: стены, зоны и свет');
  await page.locator('.board').scrollIntoViewIfNeeded();const beforeAnnotations=await page.locator('.board').screenshot();
@@ -256,6 +278,14 @@ try {
  await application.evaluate(({dialog}) => { dialog.showOpenDialog = async () => ({canceled:true,filePaths:[]}); });
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  assert.equal(await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).count(),1);
+ await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},path);
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();
+ await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'К выбору партии',exact:true}).click();
+ await page.getByLabel('Название партии').waitFor();
+ assert.equal(await page.getByRole('tab').count(),0);
+ await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();
+ await page.getByRole('tab',{name:'Карты',exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  await page.screenshot({path:join(temporary,'window.png')});
  console.log('PASS: пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');

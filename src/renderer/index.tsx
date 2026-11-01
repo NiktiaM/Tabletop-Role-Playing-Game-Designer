@@ -10,6 +10,7 @@ import { Board } from './board/Board.js';
 import type { Camera, Grid } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
+  const [tab,setTab]=useState<'maps'|'characters'>('maps');
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [placementId,setPlacementId]=useState<string|null>(null);
   const [name, setName] = useState('');
@@ -26,6 +27,21 @@ function App() {
     setBusy(true);
     try { await action(); } catch { setMessage('Нет связи с приложением. Запустите через npm run dev.'); }
     finally { setBusy(false); }
+  }
+  async function openParty() {
+    if(!canReplace())return;
+    await run(async()=>{
+      const result=await window.campaigns.open();
+      if(!result.ok){setMessage(result.error);return;}
+      if(result.value){setCampaign(result.value.campaign);setDirty(false);setPlacementId(null);setTab('maps');setMessage(`Открыто: ${result.value.fileName}`);}
+    });
+  }
+  function leaveParty() {
+    if(!canReplace())return;
+    setCampaign(null);setDirty(false);setPlacementId(null);setName('');setTab('maps');setMessage('Создайте партию или откройте сохранённый файл.');
+  }
+  function chooseTab(next:'maps'|'characters') {
+    setPlacementId(null);setTab(next);
   }
   const activeMap = campaign?.maps.find(m => m.id === campaign.view.activeMapId);
   function updateCamera(camera: Camera) {
@@ -58,14 +74,22 @@ function App() {
     if(campaign&&activeMap&&placementCharacter && commit({...campaign,tokens:[...campaign.tokens,{id:crypto.randomUUID(),mapId:activeMap.id,characterId:placementCharacter.id,column,row}]},`Размещён: ${placementCharacter.name}`))setPlacementId(null);
   }
   return <main>
-    <header><span className="badge">R PRISON · МАСТЕРСКАЯ</span><h1>Ваши истории начинаются здесь</h1><p>Локальные партии. Ваш мир, ваши правила.</p></header>
-    <section className="actions"><form onSubmit={e => { e.preventDefault(); if (!canReplace()) return; void run(async () => { const r = await window.campaigns.create(name); if (!r.ok) { setMessage(r.error); return; } setCampaign(r.value); setDirty(true); setMessage('Партия создана. Сохраните её в файл.'); }); }}>
+    {!campaign && <><header><span className="badge">R PRISON · МАСТЕРСКАЯ</span><h1>Ваши истории начинаются здесь</h1><p>Локальные партии. Ваш мир, ваши правила.</p></header>
+    <section className="actions"><form onSubmit={e => { e.preventDefault(); if (!canReplace()) return; void run(async () => { const r = await window.campaigns.create(name); if (!r.ok) { setMessage(r.error); return; } setCampaign(r.value); setTab('maps');setPlacementId(null);setDirty(true); setMessage('Партия создана. Сохраните её в файл.'); }); }}>
       <h2>Новая партия</h2><label htmlFor="name">Название партии</label><input id="name" maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="Например, Побег из Лейквью" required />
       <button disabled={busy || !name.trim()}>Создать партию</button>
-    </form><article><h2>Продолжить историю</h2><p>Откройте сохранённую партию с этого компьютера.</p><button className="secondary" disabled={busy} onClick={() => { if (!canReplace()) return; void run(async () => { const r = await window.campaigns.open(); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Открыто: ${r.value.fileName}`); } }); }}>Открыть партию…</button></article></section>
-    <section className="current"><div><span className="badge">ТЕКУЩАЯ ПАРТИЯ</span><h2>{campaign?.name ?? 'Партия не выбрана'}</h2><p>{campaign ? (dirty ? 'Есть несохранённые изменения' : 'Все изменения сохранены') : 'Карты, персонажи и игровой стол появятся в следующих итерациях.'}</p></div><button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></section>
-    {campaign && <div inert={busy}><Characters key={campaign.id} campaign={campaign} onCreate={addCharacter} onDelete={id=>{commit({...campaign,characters:campaign.characters.filter(character=>character.id!==id),tokens:campaign.tokens.filter(token=>token.characterId!==id)});if(placementId===id)setPlacementId(null);}} onPlace={id=>{setPlacementId(id);setMessage('Щёлкните свободную клетку на карте для размещения токена.');}} onMessage={setMessage} /></div>}
-    {campaign && <section className="maps" inert={busy}><div className="maps-header"><h2>Карты партии</h2><button disabled={busy || campaign.maps.length >= 20} onClick={() => void run(async () => {
+    </form><article><h2>Продолжить историю</h2><p>Откройте сохранённую партию с этого компьютера.</p><button className="secondary" disabled={busy} onClick={()=>void openParty()}>Открыть партию…</button></article></section>
+    </>}
+    {campaign && <>
+    <section className="current"><div><span className="badge">R PRISON · ПАРТИЯ</span><h2>{campaign.name}</h2><p>{dirty?'Есть несохранённые изменения':'Все изменения сохранены'}</p></div>
+    <div className="workspace-actions"><button className="secondary" disabled={busy} onClick={leaveParty}>К выбору партии</button><button className="secondary" disabled={busy} onClick={()=>void openParty()}>Открыть партию…</button>
+<button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></div></section>
+    <nav className="workspace-tabs" role="tablist" aria-label="Разделы партии">
+    <button id="tab-maps" role="tab" aria-selected={tab==='maps'} aria-controls="panel-maps" tabIndex={tab==='maps'?0:-1} disabled={busy} onClick={()=>chooseTab('maps')} onKeyDown={event=>{if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();chooseTab('characters');document.getElementById('tab-characters')?.focus();}}}>Карты</button>
+    <button id="tab-characters" role="tab" aria-selected={tab==='characters'} aria-controls="panel-characters" tabIndex={tab==='characters'?0:-1} disabled={busy} onClick={()=>chooseTab('characters')} onKeyDown={event=>{if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();chooseTab('maps');document.getElementById('tab-maps')?.focus();}}}>Персонажи</button>
+    </nav>
+    <div id="panel-characters" role="tabpanel" aria-labelledby="tab-characters" hidden={tab!=='characters'} inert={busy}><Characters key={campaign.id} campaign={campaign} onCreate={addCharacter} onDelete={id=>{commit({...campaign,characters:campaign.characters.filter(character=>character.id!==id),tokens:campaign.tokens.filter(token=>token.characterId!==id)});if(placementId===id)setPlacementId(null);}} onPlace={id=>{setTab('maps');setPlacementId(id);setMessage('Щёлкните свободную клетку на карте для размещения токена.');}} onMessage={setMessage} /></div>
+    <section id="panel-maps" role="tabpanel" aria-labelledby="tab-maps" hidden={tab!=='maps'} className="maps" inert={busy}><div className="maps-header"><h2>Карты партии</h2><button disabled={busy || campaign.maps.length >= 20} onClick={() => void run(async () => {
       const result = await window.campaigns.importMap();
       if (!result.ok) { setMessage(result.error); return; }
       const map = result.value;
@@ -77,7 +101,7 @@ function App() {
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
     </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /><Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
-    </section>}
+    </section></>}
     <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 6 · Данные остаются на вашем компьютере</footer>
   </main>;
 }
