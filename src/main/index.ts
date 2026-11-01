@@ -1,3 +1,4 @@
+import {characterBundleSchema} from '../shared/transfer.js';
 import {ZodError} from 'zod';
 import {contentSchema} from '../shared/content.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
@@ -6,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { campaignSchema, mapSchema, portraitSchema, createCampaign, type Result } from '../shared/campaign.js';
-import { readCampaign, writeCampaign } from './storage.js';
+import { readCampaign, writeCampaign, writeJsonAtomic } from './storage.js';
 const here = dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow;
 async function result<T>(action: () => Promise<T>): Promise<Result<T>> {
@@ -14,7 +15,7 @@ async function result<T>(action: () => Promise<T>): Promise<Result<T>> {
   catch (error) { console.error(error); return { ok: false, error: 'Не удалось выполнить операцию. Проверьте формат, права доступа и свободное место. Карта: PNG/JPG до 15 МБ, до 8192 пикселей по стороне и 32 млн пикселей. Партия: до 100 МБ. Исходный файл не изменяйте.' }; }
 }
 async function importContentResult<T>(action:()=>Promise<T>):Promise<Result<T>> {
- try{return {ok:true,value:await action()};}catch(error){return {ok:false,error:error instanceof ZodError?`Проверьте поля JSON: ${error.issues.slice(0,5).map(issue=>`${issue.path.join('.')||'файл'}: ${issue.message}`).join('; ')}`:error instanceof SyntaxError?'Некорректный JSON. Проверьте кавычки, запятые и скобки по примеру examples/content-template.json.':error instanceof Error?error.message:'Не удалось импортировать файл'};}
+ try{return {ok:true,value:await action()};}catch(error){return {ok:false,error:error instanceof ZodError?`Проверьте поля JSON: ${error.issues.slice(0,5).map(issue=>`${issue.path.join('.')||'файл'}: ${issue.message}`).join('; ')}`:error instanceof SyntaxError?'Некорректный JSON. Проверьте кавычки, запятые и скобки.':error instanceof Error?error.message:'Не удалось импортировать файл'};}
 }
 function validateImages(campaign: import('../shared/campaign.js').Campaign) {
   for (const map of campaign.maps) {
@@ -33,6 +34,20 @@ function validateImages(campaign: import('../shared/campaign.js').Campaign) {
   return campaign;
 }
 app.whenReady().then(() => {
+ ipcMain.handle('campaign:export-character',(event,input:unknown)=>importContentResult(async()=>{
+  if(event.senderFrame!==window.webContents.mainFrame)throw new Error('Недопустимый запрос');
+  const pack=characterBundleSchema.parse(input);validateImages({...createCampaign('Проверка'),characters:[pack.character],items:pack.items});
+  const selected=await dialog.showSaveDialog(window,{title:'Экспорт персонажа',defaultPath:'Персонаж.rprison-character.json',filters:[{name:'Персонаж JSON',extensions:['json']}]});
+  if(selected.canceled||!selected.filePath)return null;
+  await writeJsonAtomic(selected.filePath,pack,20*1024*1024);return basename(selected.filePath);
+ }));
+ ipcMain.handle('campaign:import-character',event=>importContentResult(async()=>{
+  if(event.senderFrame!==window.webContents.mainFrame)throw new Error('Недопустимый запрос');
+  const selected=await dialog.showOpenDialog(window,{title:'Перенести персонажа',properties:['openFile'],filters:[{name:'Персонаж JSON',extensions:['json']}]});
+  if(selected.canceled||!selected.filePaths[0])return null;
+  const path=selected.filePaths[0];if((await stat(path)).size>20*1024*1024)throw new Error('Пакет персонажа превышает 20 МБ');
+  const pack=characterBundleSchema.parse(JSON.parse(await readFile(path,'utf8')) as unknown);validateImages({...createCampaign('Проверка'),characters:[pack.character],items:pack.items});return pack;
+ }));
  ipcMain.handle('campaign:import-content',event=>importContentResult(async()=>{
   if(event.senderFrame!==window.webContents.mainFrame)throw new Error('Недопустимый запрос');
   const selected=await dialog.showOpenDialog(window,{title:'Импорт персонажей и предметов',properties:['openFile'],filters:[{name:'Данные JSON',extensions:['json']}]});

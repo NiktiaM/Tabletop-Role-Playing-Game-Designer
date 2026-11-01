@@ -34,10 +34,11 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  <div className="character-list">{campaign.characters.map(character=><article key={character.id}>
  {character.portrait&&<img className="portrait-preview" src={character.portrait} alt="" />}<strong>{character.name}</strong><span>{character.kind==='npc'?'NPC':'Персонаж'} · {character.footprint.width}×{character.footprint.height}</span>
  <CharacterSummary character={character} campaign={campaign}/>
+ <div className="character-equipment"><strong>Способности:</strong>{campaign.abilities.filter(ability=>ability.ownerId===character.id).map(ability=><span key={ability.id}>{ability.definition.name} · {ability.definition.maxUses?`${ability.usesRemaining}/${ability.definition.maxUses}`:'без лимита'}</span>)}</div>
  <div className="character-equipment"><strong>Предметы:</strong> {campaign.items.filter(item=>item.ownerId===character.id).length?campaign.items.filter(item=>item.ownerId===character.id).map(item=><span key={item.id}>{item.template.name} · прочность {item.durability}/{item.template.maxDurability} · заряды {item.charges}/{item.template.maxCharges}{item.equipped?' · экипирован':''}</span>):<span>Нет предметов. Выдайте их во вкладке «Предметы».</span>}</div>
  <button onClick={()=>setStatsId(statsId===character.id?null:character.id)}>Характеристики: {character.name}</button>
  <button disabled={!campaign.view.activeMapId} onClick={()=>onPlace(character.id)}>На карту: {character.name}</button>
- <button className="secondary" onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт? Предметы вернутся в общий запас.`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>
+ <button className="secondary" onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт? Предметы вернутся в общий запас; назначенные способности удалятся.`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>
  {statsId===character.id&&<CharacterValues character={character} rules={campaign.ruleset} onSave={values=>onValues(character.id,values)}/>}
  </article>)}</div>
  </section>;

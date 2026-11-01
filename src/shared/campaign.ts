@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import {abilitySchema,assignedAbilitySchema} from './abilities.js';
+import type {CharacterBundle} from './transfer.js';
 import {portraitSchema} from './images.js';
 export {portraitSchema} from './images.js';
 import type {ContentPack} from './content.js';
@@ -45,11 +47,14 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(9), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(10), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   const ids = new Set(c.maps.map(m => m.id));
   const characters=new Map(c.characters.map(character=>[character.id,character]));
+  if(new Set(c.abilityTemplates.map(ability=>ability.id)).size!==c.abilityTemplates.length||new Set(c.abilities.map(ability=>ability.id)).size!==c.abilities.length)ctx.addIssue({code:'custom',message:'Повторяющиеся способности'});
+  if(c.abilities.some(ability=>!characters.has(ability.ownerId)))ctx.addIssue({code:'custom',message:'Владелец способности не найден'});
+
   if(new Set(c.itemTemplates.map(item=>item.id)).size!==c.itemTemplates.length||new Set(c.items.map(item=>item.id)).size!==c.items.length)ctx.addIssue({code:'custom',message:'Повторяющиеся идентификаторы предметов'});
   if(c.items.some(item=>item.ownerId!==null&&!characters.has(item.ownerId)))ctx.addIssue({code:'custom',message:'Владелец предмета не найден'});
 
@@ -69,10 +74,10 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 9, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 10, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8)) {
-    return campaignSchema.parse({ ...input, schemaVersion: 9 });
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9)) {
+    return campaignSchema.parse({ ...input, schemaVersion: 10 });
   }
   return campaignSchema.parse(input);
 }
@@ -84,11 +89,13 @@ export interface CampaignAPI {
   create(name: string): Promise<Result<Campaign>>;
   save(campaign: Campaign): Promise<Result<{ campaign: Campaign; fileName: string } | null>>;
   open(): Promise<Result<{ campaign: Campaign; fileName: string } | null>>;
+  exportCharacter(bundle:CharacterBundle):Promise<Result<string|null>>;
+  importCharacter():Promise<Result<CharacterBundle|null>>;
   importContent(): Promise<Result<ContentPack | null>>;
   importPortrait(): Promise<Result<string | null>>;
   importMap(): Promise<Result<GameMap | null>>;
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 9, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 10, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }
