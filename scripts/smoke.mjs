@@ -1,0 +1,36 @@
+import { _electron as electron } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const temporary = await mkdtemp(join(tmpdir(), 'rprison-ui-'));
+let application;
+try {
+ const path = join(temporary, 'партия.json');
+ const launch = () => electron.launch({ args: [...(process.env.CI ? ['--no-sandbox'] : []), '.'] });
+ application = await launch();
+ let page = await application.firstWindow();
+ const errors = []; page.on('pageerror', e => errors.push(e.message));
+ await page.getByLabel('Название партии').fill('Побег из Лейквью');
+ await page.getByRole('button', { name: 'Создать партию', exact: true }).click();
+ await page.getByRole('heading', { name: 'Побег из Лейквью', exact: true }).waitFor();
+ await application.evaluate(({dialog}, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, path);
+ await page.getByRole('button', {name:'Сохранить как…'}).click();
+ await page.getByText('Все изменения сохранены', {exact:true}).waitFor();
+ const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью');
+ await application.close(); application = await launch(); page = await application.firstWindow();
+ page.on('pageerror', e => errors.push(e.message));
+ await application.evaluate(({dialog}, path) => { dialog.showOpenDialog = async () => ({canceled:false, filePaths:[path]}); }, path);
+ await page.getByRole('button',{name:'Открыть партию…'}).click();
+ await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).waitFor();
+ await writeFile(path, '{broken');
+ await page.getByRole('button',{name:'Открыть партию…'}).click();
+ await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
+ assert.equal(await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).count(),1);
+ await application.evaluate(({dialog}) => { dialog.showOpenDialog = async () => ({canceled:true,filePaths:[]}); });
+ await page.getByRole('button',{name:'Открыть партию…'}).click();
+ assert.equal(await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).count(),1);
+ assert.deepEqual(errors,[]);
+ await page.screenshot({path:join(temporary,'window.png')});
+ console.log('PASS: Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
+} finally { if(application) await application.close(); await rm(temporary,{recursive:true,force:true}); }
