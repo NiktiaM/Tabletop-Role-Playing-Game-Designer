@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Character, Token, GameMap, Camera } from '../../shared/campaign.js';
 import { cellOrigin, imageToScreen, imageToCell, screenToImage } from '../../domain/grid.js';
-export function Tokens({tokens,characters,map,camera,disabled,onMove,onRemove,onSelect,selectedId,onPreview}: {tokens:Token[];characters:Character[];map:GameMap;camera:Camera;disabled:boolean;onMove:(id:string,column:number,row:number)=>void;onRemove:(id:string)=>void;onSelect:(id:string)=>void;selectedId:string|null;onPreview:(column:number,row:number)=>void}) {
+export function Tokens({tokens,characters,map,camera,disabled,onMove,onRemove,onSelect,selectedId,onPreview,activeCharacterId}: {activeCharacterId:string|null;tokens:Token[];characters:Character[];map:GameMap;camera:Camera;disabled:boolean;onMove:(id:string,column:number,row:number)=>void;onRemove:(id:string)=>void;onSelect:(id:string)=>void;selectedId:string|null;onPreview:(column:number,row:number)=>void}) {
  const [drag,setDrag]=useState<{id:string;x:number;y:number;dx:number;dy:number}|null>(null);
  return <>{tokens.filter(token=>token.mapId===map.id).map(token=>{
   const character=characters.find(c=>c.id===token.characterId);if(!character)return null;
@@ -9,7 +9,7 @@ export function Tokens({tokens,characters,map,camera,disabled,onMove,onRemove,on
   const width=character.footprint.width*cellSize,height=character.footprint.height*cellSize,size=Math.min(width,height);
   const dx=drag?.id===token.id?drag.dx:0,dy=drag?.id===token.id?drag.dy:0;
   return <div key={token.id} className={`token-footprint${selectedId===token.id?' selected-token':''}`} style={{left:origin.x+dx,top:origin.y+dy,width,height}}>
-   <button type="button" className="token" disabled={disabled} aria-label={`Токен: ${character.name}`} title={`${character.name} · ${character.footprint.width}×${character.footprint.height}`} style={{width:size,height:size}} onPointerDown={event=>{
+   <button type="button" className={`token${activeCharacterId===character.id?' actor-token':''}`} disabled={disabled} aria-label={`Токен: ${character.name}`} title={`${character.name} · ${character.footprint.width}×${character.footprint.height}`} style={{width:size,height:size}} onPointerDown={event=>{
      event.stopPropagation();if(event.button!==0)return;event.currentTarget.setPointerCapture(event.pointerId);onSelect(token.id);setDrag({id:token.id,x:event.clientX,y:event.clientY,dx:0,dy:0});
    }} onPointerMove={event=>{event.stopPropagation();if(drag?.id===token.id){const dx=event.clientX-drag.x,dy=event.clientY-drag.y;setDrag({...drag,dx,dy});const cell=imageToCell(screenToImage({x:origin.x+dx+cellSize/2,y:origin.y+dy+cellSize/2},camera),map.grid);onPreview(cell.column,cell.row);}}} onPointerUp={event=>{
      event.stopPropagation();if(drag?.id!==token.id)return;

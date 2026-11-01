@@ -5,6 +5,8 @@ import './style.css';
 import { campaignSchema } from '../shared/campaign.js';
 import type { Annotation } from '../shared/annotations.js';
 import {placeItem,takeItem} from '../domain/ground-items.js';
+import {setResource} from '../domain/resources.js';
+import {Encounter} from './Encounter.js';
 import {startGame,setTacticalMovement} from '../domain/session.js';
 import {moveWithPath,movementBudget} from '../domain/movement-action.js';
 import {Abilities} from './Abilities.js';
@@ -20,12 +22,14 @@ import { Board } from './board/Board.js';
 import type { Camera, Grid } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
+  const [inspectedId,setInspectedId]=useState<string|null>(null);
   const [screen,setScreen]=useState<'configure'|'play'>('configure');
   const [tab,setTab]=useState<'maps'|'characters'|'rules'|'items'|'inventory'|'abilities'>('maps');
   const [setupMode,setSetupMode]=useState(false),[undoMove,setUndoMove]=useState<Campaign|null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [placementId,setPlacementId]=useState<string|null>(null);
   const [name, setName] = useState('');
+  useEffect(()=>setInspectedId(null),[campaign?.id]);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('Создайте партию или откройте сохранённый файл.');
@@ -55,7 +59,7 @@ function App() {
   function chooseTab(next:'maps'|'characters'|'rules'|'items'|'inventory'|'abilities') {
     setPlacementId(null);setTab(next);
   }
-  function openConfigurator(){setScreen('configure');setTab('maps');setPlacementId(null);setUndoMove(null);setSetupMode(false);}
+  function openConfigurator(){setInspectedId(null);setScreen('configure');setTab('maps');setPlacementId(null);setUndoMove(null);setSetupMode(false);}
   function openGame(){if(!campaign)return;try{if(!campaign.session.started&&!commit(startGame(campaign),'Игра начата. Сохраните партию.'))return;setScreen('play');setTab('maps');setPlacementId(null);setUndoMove(null);setSetupMode(false);}catch(error){setMessage(error instanceof Error?error.message:'Не удалось начать игру');}}
   const activeMap = campaign?.maps.find(m => m.id === campaign.view.activeMapId);
   function updateCamera(camera: Camera) {
@@ -88,9 +92,10 @@ function App() {
   function moveToken(id:string,column:number,row:number) {
     if(!campaign)return;if(screen==='configure'||setupMode){commit({...campaign,tokens:campaign.tokens.map(token=>token.id===id?{...token,column,row}:token)},'Расстановка мастера: без пути и расхода ОД.');return;}try{const moved=moveWithPath(campaign,id,column,row,campaign.session.tacticalMovement);if(moved.cost&&commit(moved.campaign,campaign.session.tacticalMovement?`Движение: ${Number(moved.cost.toFixed(3))} ОД.`:'Свободное движение: ОД не расходуются.'))setUndoMove(campaign);}catch(error){setMessage(error instanceof Error?error.message:'Движение отклонено');}
   }
-  function setBudget(id:string,value:number|null){
-    if(!campaign)return;try{const character=campaign.characters.find(character=>character.id===id);if(!character)return;const budget=movementBudget(campaign,character);if(value!==null&&(!Number.isFinite(value)||value<0||value>budget.maximum))throw new Error('Остаток должен быть от нуля до максимума');const resources={...character.resources};if(value===null)delete resources[budget.key];else resources[budget.key]=value;commit({...campaign,characters:campaign.characters.map(existing=>existing.id===id?{...existing,resources}:existing)},'Остаток ОД обновлён.');}catch(error){setMessage(error instanceof Error?error.message:'Ошибка бюджета');}
+  function changeResource(id:string,key:string,value:number|null){
+    if(!campaign)return false;try{return commit(setResource(campaign,id,key,value),'Текущий ресурс обновлён.');}catch(error){setMessage(error instanceof Error?error.message:'Не удалось изменить ресурс');return false;}
   }
+  function setBudget(id:string,value:number|null){if(campaign?.ruleset.movement.budgetStat)changeResource(id,campaign.ruleset.movement.budgetStat,value);}
   function removeToken(id:string) {if(campaign)commit({...campaign,tokens:campaign.tokens.filter(token=>token.id!==id)},'Токен убран с карты. Персонаж сохранён.');}
   const placementCharacter=campaign?.characters.find(character=>character.id===placementId)??null;
   function placeToken(column:number,row:number) {
@@ -108,8 +113,9 @@ function App() {
     <div className="workspace-actions"><button className="secondary" disabled={busy} onClick={leaveParty}>К выбору партии</button><button className="secondary" disabled={busy} onClick={()=>void openParty()}>Открыть партию…</button>
 <button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></div></section>
     <section className="session-bar" aria-label="Режим приложения"><strong>{screen==='configure'?'Подготовка · Конфигуратор':'Проведение игры'}</strong>
-    {screen==='configure'?<><button disabled={busy||!campaign.maps.length} onClick={openGame}>{campaign.session.started?'Вернуться в игру':'Начать игру'}</button>{!campaign.maps.length&&<span>Добавьте поле, чтобы начать игру.</span>}</>:<><button disabled={busy} onClick={openConfigurator}>Открыть конфигуратор</button><label className="grid-toggle"><input type="checkbox" checked={campaign.session.tacticalMovement} disabled={busy} onChange={event=>commit(setTacticalMovement(campaign,event.target.checked),'Режим движения изменён без сброса ОД.')}/>Тактическое движение (расход ОД)</label><span>{campaign.session.tacticalMovement?'Расход ОД включён; очередь ходов ещё не реализована.':'Свободная игра: путь проверяется, ОД не расходуются.'}</span></>}
+    {screen==='configure'?<><button disabled={busy||!campaign.maps.length} onClick={openGame}>{campaign.session.started?'Вернуться в игру':'Начать игру'}</button>{!campaign.maps.length&&<span>Добавьте поле, чтобы начать игру.</span>}</>:<><button disabled={busy} onClick={openConfigurator}>Открыть конфигуратор</button><label className="grid-toggle"><input type="checkbox" checked={campaign.session.tacticalMovement} disabled={busy||!!campaign.encounter} onChange={event=>commit(setTacticalMovement(campaign,event.target.checked),'Режим движения изменён без сброса ОД.')}/>Тактическое движение (расход ОД)</label><span>{campaign.session.tacticalMovement?'Расход ОД включён.':'Свободная игра: путь проверяется, ОД не расходуются.'}</span></>}
     </section>
+    {screen==='play'&&<div inert={busy}><Encounter key={campaign.id} campaign={campaign} onChange={commit} onCharacter={id=>{setInspectedId(id);setTab('maps');}}/></div>}
     <nav className="workspace-tabs" role="tablist" aria-label="Разделы партии">
     {([{id:'maps',name:screen==='configure'?'Карты':'Поля'},{id:'characters',name:'Персонажи'},{id:'rules',name:'Правила'},{id:'items',name:'Предметы'},{id:'inventory',name:'Инвентари'},{id:'abilities',name:'Способности'}] as const).filter(item=>screen==='configure'||item.id!=='rules').map((item,index,list)=><button key={item.id} id={`tab-${item.id}`} role="tab" aria-selected={tab===item.id} aria-controls={`panel-${item.id}`} tabIndex={tab===item.id?0:-1} disabled={busy} onClick={()=>chooseTab(item.id)} onKeyDown={event=>{
       if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();const next=list[(index+(event.key==='ArrowRight'?1:list.length-1))%list.length].id;chooseTab(next);document.getElementById(`tab-${next}`)?.focus();}
@@ -131,7 +137,7 @@ function App() {
     <p hidden={screen!=='configure'} className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <React.Fragment key={activeMap.id}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={activeMap.id}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board inspectedId={inspectedId} onInspect={setInspectedId} onResource={changeResource} onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section></>}
     <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Подготовка и проведение игры · Данные остаются на вашем компьютере</footer>
   </main>;

@@ -32,6 +32,7 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  {error&&<p role="alert">{error}</p>}
  <p className="hint">Портрет необязателен: без него токен показывает первую букву имени. Размещение: нажмите «На карту», затем щёлкните свободную клетку. Занятые клетки и выход за карту не допускаются.</p>
  </form>}
+ {configure&&campaign.encounter&&<p className="hint">Идёт бой. Участников можно удалить после завершения боя в режиме игры.</p>}
  <div className="character-list">{campaign.characters.map(character=><article key={character.id}>
  {character.portrait&&<img className="portrait-preview" src={character.portrait} alt="" />}<strong>{character.name}</strong><span>{character.kind==='npc'?'NPC':'Персонаж'} · {character.footprint.width}×{character.footprint.height}</span>
  <CharacterSummary character={character} campaign={campaign}/>
@@ -39,7 +40,7 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  <div className="character-equipment"><strong>Предметы:</strong> {campaign.items.filter(item=>item.ownerId===character.id).length?campaign.items.filter(item=>item.ownerId===character.id).map(item=><span key={item.id}>{item.template.name} · прочность {item.durability}/{item.template.maxDurability} · заряды {item.charges}/{item.template.maxCharges}{item.equipped?' · экипирован':''}</span>):<span>Нет предметов. Выдайте их во вкладке «Предметы».</span>}</div>
  {configure&&<button onClick={()=>setStatsId(statsId===character.id?null:character.id)}>Характеристики: {character.name}</button>}
  <button disabled={!campaign.view.activeMapId} onClick={()=>onPlace(character.id)}>На карту: {character.name}</button>
- {configure&&<button className="secondary" onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт? Предметы вернутся в общий запас; назначенные способности удалятся.`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>}
+ {configure&&<button className="secondary" disabled={!!campaign.encounter?.participants.some(row=>row.characterId===character.id)} title={campaign.encounter?.participants.some(row=>row.characterId===character.id)?'Сначала завершите бой':undefined} onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт? Предметы вернутся в общий запас; назначенные способности удалятся.`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>}
  {configure&&statsId===character.id&&<CharacterValues character={character} rules={campaign.ruleset} onSave={values=>onValues(character.id,values)}/>}
  </article>)}</div>
  </section>;

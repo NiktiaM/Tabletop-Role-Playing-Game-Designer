@@ -1,3 +1,4 @@
+import {encounterSchema} from './encounter.js';
 import { z } from 'zod';
 import {abilitySchema,assignedAbilitySchema} from './abilities.js';
 import type {CharacterBundle} from './transfer.js';
@@ -48,11 +49,12 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(13),session:z.object({started:z.boolean(),tacticalMovement:z.boolean()}).strict().refine(session=>!session.tacticalMovement||session.started,'Тактическое движение доступно только в начатой игре').default({started:false,tacticalMovement:false}), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(14),encounter:encounterSchema.nullable().default(null),session:z.object({started:z.boolean(),tacticalMovement:z.boolean()}).strict().refine(session=>!session.tacticalMovement||session.started,'Тактическое движение доступно только в начатой игре').default({started:false,tacticalMovement:false}), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   const ids = new Set(c.maps.map(m => m.id));
   const characters=new Map(c.characters.map(character=>[character.id,character]));
+  if(c.encounter){if(!c.session.started||!c.session.tacticalMovement)ctx.addIssue({code:'custom',message:'Бой требует начатой игры и расхода ОД'});if(c.encounter.apStat!==c.ruleset.movement.budgetStat)ctx.addIssue({code:'custom',message:'Сначала завершите бой, чтобы изменить показатель ОД'});if(c.encounter.participants.some(row=>!characters.has(row.characterId)))ctx.addIssue({code:'custom',message:'Сначала завершите бой, чтобы удалить участника'});}
   if(new Set(c.abilityTemplates.map(ability=>ability.id)).size!==c.abilityTemplates.length||new Set(c.abilities.map(ability=>ability.id)).size!==c.abilities.length)ctx.addIssue({code:'custom',message:'Повторяющиеся способности'});
   if(c.abilities.some(ability=>!characters.has(ability.ownerId)))ctx.addIssue({code:'custom',message:'Владелец способности не найден'});
 
@@ -76,15 +78,15 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 13, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 14, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9 || input.schemaVersion === 10 || input.schemaVersion === 11 || input.schemaVersion === 12)) {
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9 || input.schemaVersion === 10 || input.schemaVersion === 11 || input.schemaVersion === 12 || input.schemaVersion === 13)) {
     let rules=input&&typeof input==='object'&&'ruleset' in input?input.ruleset:undefined;
     if(rules&&typeof rules==='object'&&!('movement' in rules)){
       const checked=rulesetSchema.parse(rules),preset=rPrisonDraft(),known=preset.stats.find(stat=>stat.key===preset.movement.budgetStat);
       if(known?.kind==='derived'&&checked.stats.some(stat=>stat.key===known.key&&stat.kind==='derived'&&stat.formula.replace(/\s+/g,'')===known.formula.replace(/\s+/g,'')))rules={...checked,movement:preset.movement};
     }
-    return campaignSchema.parse({ ...input, ...(rules?{ruleset:rules}:{}), schemaVersion: 13 });
+    return campaignSchema.parse({ ...input, ...(rules?{ruleset:rules}:{}), schemaVersion: 14 });
   }
   return campaignSchema.parse(input);
 }
@@ -104,5 +106,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 13, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 14, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }

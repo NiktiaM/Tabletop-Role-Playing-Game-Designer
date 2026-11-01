@@ -4,7 +4,7 @@ import {parseFormula} from './rules/formula.js';
 import type {Ruleset} from '../shared/rules.js';
 function signature(rules:Ruleset){return JSON.stringify([...rules.stats].sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0).map(stat=>stat.kind==='base'?{key:stat.key,kind:stat.kind,value:stat.defaultValue}:{key:stat.key,kind:stat.kind,formula:parseFormula(stat.formula)}));}
 export function checkCompatibility(target:Ruleset,source:Ruleset):void {
- if(target.engineVersion!==source.engineVersion||signature(target)!==signature(source)||JSON.stringify(target.movement)!==JSON.stringify(source.movement))throw new Error('Правила несовместимы: должны совпадать ключи, исходные значения по умолчанию формулы показателей и настройки движения. Названия и номера ревизий могут отличаться. Правила партии не будут заменены.');
+ if(target.engineVersion!==source.engineVersion||target.healthStat!==source.healthStat||signature(target)!==signature(source)||JSON.stringify(target.movement)!==JSON.stringify(source.movement))throw new Error('Правила несовместимы: должны совпадать ключи, исходные значения по умолчанию формулы показателей и настройки HP/движения. Названия и номера ревизий могут отличаться. Правила партии не будут заменены.');
 }
 export function exportCharacter(campaign:Campaign,id:string):CharacterBundle {
  const character=campaign.characters.find(character=>character.id===id);if(!character)throw new Error('Персонаж не найден');

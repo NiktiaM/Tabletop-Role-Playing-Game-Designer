@@ -21,9 +21,10 @@ export function compileStats(stats:StatDefinition[]):Map<string,Expr>{
 }
 export const defaultMovement=()=>({budgetStat:null as string|null,mode:'meters' as 'meters'|'cells',diagonal:true});
 export const movementSchema=z.object({budgetStat:statKey.nullable(),mode:z.enum(['meters','cells']),diagonal:z.boolean()}).strict();
-export const rulesetSchema=z.object({id:z.uuid(),name:z.string().trim().min(1).max(120),revision:z.number().int().min(1).max(1000000),engineVersion:z.literal(1),movement:movementSchema.default(defaultMovement),stats:z.array(statSchema).max(64)}).strict().superRefine((rules,ctx)=>{
+export const rulesetSchema=z.object({id:z.uuid(),name:z.string().trim().min(1).max(120),revision:z.number().int().min(1).max(1000000),engineVersion:z.literal(1),healthStat:statKey.nullable().optional(),movement:movementSchema.default(defaultMovement),stats:z.array(statSchema).max(64)}).strict().superRefine((rules,ctx)=>{
+ if(rules.healthStat&&!rules.stats.some(stat=>stat.key===rules.healthStat))ctx.addIssue({code:'custom',message:'Показатель максимума HP не найден'});
  if(rules.movement.budgetStat&&!rules.stats.some(stat=>stat.key===rules.movement.budgetStat))ctx.addIssue({code:'custom',message:'Источник бюджета движения не найден среди показателей'});
  try{compileStats(rules.stats);}catch(error){ctx.addIssue({code:'custom',message:error instanceof Error?error.message:'Неверные правила'});}
-});
+}).transform(rules=>({...rules,healthStat:rules.healthStat===undefined?(rules.movement.budgetStat!=='hp_max'&&rules.stats.some(stat=>stat.key==='hp_max')?'hp_max':null):rules.healthStat})).refine(rules=>!rules.healthStat||rules.healthStat!==rules.movement.budgetStat,'HP и ОД должны использовать разные показатели');
 export type Ruleset=z.infer<typeof rulesetSchema>;
-export const emptyRuleset=():Ruleset=>({id:crypto.randomUUID(),name:'Правила партии',revision:1,engineVersion:1,movement:defaultMovement(),stats:[]});
+export const emptyRuleset=():Ruleset=>({id:crypto.randomUUID(),name:'Правила партии',revision:1,engineVersion:1,healthStat:null,movement:defaultMovement(),stats:[]});

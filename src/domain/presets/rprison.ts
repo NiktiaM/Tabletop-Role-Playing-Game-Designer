@@ -1,6 +1,6 @@
 import {emptyRuleset,type Ruleset} from '../../shared/rules.js';
 export function rPrisonDraft():Ruleset {
- return {...emptyRuleset(),name:'R Prison v1.1 — черновик',movement:{budgetStat:'ap_max',mode:'meters',diagonal:true},stats:[
+ return {...emptyRuleset(),name:'R Prison v1.1 — черновик',healthStat:'hp_max',movement:{budgetStat:'ap_max',mode:'meters',diagonal:true},stats:[
   {key:'strength',name:'Сила',kind:'base',defaultValue:5},
   {key:'dexterity',name:'Ловкость',kind:'base',defaultValue:5},
   {key:'constitution',name:'Телосложение',kind:'base',defaultValue:5},
