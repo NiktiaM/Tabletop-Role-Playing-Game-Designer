@@ -32,3 +32,20 @@ export function gridSegments(grid: Grid, width: number, height: number, camera: 
   }
   return segments;
 }
+/** Screen dragging changes only grid origin, independent of camera zoom. */
+export function moveGrid(grid: Grid, dx: number, dy: number, zoom: number): Grid {
+  return { ...grid, originPx: {
+    x: Math.max(-8192,Math.min(8192,grid.originPx.x + dx/zoom)),
+    y: Math.max(-8192,Math.min(8192,grid.originPx.y + dy/zoom)),
+  } };
+}
+export function suggestedCellSize(width: number, height: number, cellsAcross: number): number {
+  if (!Number.isFinite(cellsAcross) || cellsAcross<=0) throw new Error('Число клеток должно быть положительным');
+  return Math.max(4,Math.min(4096,Math.min(width,height)/cellsAcross));
+}
+export function calibrateGrid(grid: Grid, start: Point, end: Point, meters: number): Grid {
+  if (!Number.isFinite(meters) || meters<=0) throw new Error('Укажите положительную длину в метрах');
+  const size=Math.hypot(end.x-start.x,end.y-start.y)/(meters/grid.metersPerCell);
+  if (!Number.isFinite(size) || size<4 || size>4096) throw new Error('Полученный размер клетки должен быть от 4 до 4096 пикселей. Выберите более длинный отрезок или другую длину.');
+  return {...grid,cellSizePx:size,originPx:{x:start.x,y:start.y},visible:true};
+}

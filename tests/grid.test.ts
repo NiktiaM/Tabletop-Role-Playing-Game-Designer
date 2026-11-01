@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { imageToCell, cellOrigin, screenToImage, imageToScreen, gridSegments } from '../src/domain/grid.js';
 import { gridSchema } from '../src/shared/campaign.js';
-const grid = {cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true};
+const grid = {metersPerCell:1,locationKind:'custom' as const,cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true};
 test('одна клетка сохраняется при разных масштабах и смещениях камеры', () => {
  const origin=cellOrigin(5,8,grid);
  const point={x:origin.x+grid.cellSizePx/2,y:origin.y+grid.cellSizePx/2};
@@ -36,4 +36,30 @@ test('мелкая сетка скрывается без изменения к�
  expect(grid.cellSizePx).toBe(80.5);
  for(const size of [0,-1,NaN,Infinity,4097]) expect(gridSchema.safeParse({...grid,cellSizePx:size}).success).toBe(false);
  expect(gridSchema.safeParse({...grid,originPx:{x:8193,y:0}}).success).toBe(false);
+});
+test('сдвиг сетки мышью переводит экранные пиксели в изображение и ограничивает начало', async () => {
+ const {moveGrid}=await import('../src/domain/grid.js');
+ const before=structuredClone(grid);
+ expect(moveGrid(grid,40,-20,0.5).originPx).toEqual({x:97.25,y:-63.5});
+ expect(moveGrid(grid,80,-40,1).originPx).toEqual({x:97.25,y:-63.5});
+ expect(moveGrid(grid,1e6,-1e6,0.02).originPx).toEqual({x:8192,y:-8192});
+ expect(grid).toEqual(before); expect(moveGrid(grid,40,20,2).cellSizePx).toBe(grid.cellSizePx);
+});
+test('помощник подбирает размер по изображению и точно калибрует по отрезку', async () => {
+ const {suggestedCellSize,calibrateGrid}=await import('../src/domain/grid.js');
+ expect(suggestedCellSize(4000,2400,12)).toBe(200);
+ expect(suggestedCellSize(4000,2400,40)).toBe(60);
+ expect(suggestedCellSize(8000,4800,12)).toBe(400);
+ const calibrated=calibrateGrid(grid,{x:10,y:20},{x:310,y:420},5);
+ expect(calibrated).toEqual({...grid,cellSizePx:100,originPx:{x:10,y:20},visible:true});
+ expect(()=>calibrateGrid(grid,{x:0,y:0},{x:0,y:0},1)).toThrow();
+ expect(()=>calibrateGrid(grid,{x:0,y:0},{x:100,y:0},0)).toThrow();
+ expect(()=>suggestedCellSize(4000,4000,NaN)).toThrow();
+});
+test('физический масштаб меняет число клеток на измеренном отрезке', async () => {
+ const {calibrateGrid}=await import('../src/domain/grid.js');
+ const start={x:0,y:0},end={x:500,y:0};
+ expect(calibrateGrid({...grid,metersPerCell:1},start,end,10).cellSizePx).toBe(50);
+ expect(calibrateGrid({...grid,metersPerCell:5},start,end,10).cellSizePx).toBe(250);
+ for(const metersPerCell of [0,-1,Infinity,NaN,1001]) expect(gridSchema.safeParse({...grid,metersPerCell}).success).toBe(false);
 });
