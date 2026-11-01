@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Campaign, CampaignAPI } from '../shared/campaign.js';
 import './style.css';
+import { GridControls } from './board/GridControls.js';
 import { Board } from './board/Board.js';
-import type { Camera } from '../shared/campaign.js';
+import type { Camera, Grid } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -30,6 +31,11 @@ function App() {
     });
     setDirty(true);
   }
+  function updateGrid(grid: Grid) {
+    const mapId = activeMap?.id;
+    setCampaign(previous => previous ? { ...previous, maps: previous.maps.map(map => map.id === mapId ? {...map,grid} : map) } : previous);
+    setDirty(true);
+  }
   return <main>
     <header><span className="badge">R PRISON · МАСТЕРСКАЯ</span><h1>Ваши истории начинаются здесь</h1><p>Локальные партии. Ваш мир, ваши правила.</p></header>
     <section className="actions"><form onSubmit={e => { e.preventDefault(); if (!canReplace()) return; void run(async () => { const r = await window.campaigns.create(name); if (!r.ok) { setMessage(r.error); return; } setCampaign(r.value); setDirty(true); setMessage('Партия создана. Сохраните её в файл.'); }); }}>
@@ -48,9 +54,9 @@ function App() {
     <p className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} />}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls grid={activeMap.grid} onGrid={updateGrid} /><Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section>}
-    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 2 · Данные остаются на вашем компьютере</footer>
+    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 3 · Данные остаются на вашем компьютере</footer>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
