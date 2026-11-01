@@ -112,7 +112,7 @@ try {
  await application.evaluate(({dialog}, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, path);
  await page.getByRole('button', {name:'Сохранить как…'}).click();
  await page.getByText('Все изменения сохранены', {exact:true}).waitFor();
- const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,11);
+ const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,12);
  assert.deepEqual(saved.maps[0].grid,{metersPerCell:1,locationKind:'custom',cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true});
  const savedCamera = saved.view.cameras[saved.view.activeMapId]; assert.ok(savedCamera.zoom > 0);
  await application.close(); console.log('Запуск Electron'); application = await launch(); page = await application.firstWindow();
@@ -399,7 +399,7 @@ try {
  // Return to the original party so the existing failure/cancellation regression remains unchanged.
  await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();
  console.log('Путь, стены, доступность и ОД');
- const movePath=join(temporary,'movement.json');const moving=structuredClone(sourceParty);moving.id=crypto.randomUUID();moving.name='Проверка движения';moving.characters=[{...sourceCharacter,values:{...sourceCharacter.values,dexterity:8},resources:{ap_max:8}}];moving.items=moving.items.filter(item=>item.ownerId===sourceCharacter.id);moving.abilities=moving.abilities.filter(ability=>ability.ownerId===sourceCharacter.id);
+ const movePath=join(temporary,'movement.json');const moving=structuredClone(sourceParty);moving.id=crypto.randomUUID();moving.name='Проверка движения';moving.session={started:true,tacticalMovement:true};moving.characters=[{...sourceCharacter,values:{...sourceCharacter.values,dexterity:8},resources:{ap_max:8}}];moving.items=moving.items.filter(item=>item.ownerId===sourceCharacter.id);moving.abilities=moving.abilities.filter(ability=>ability.ownerId===sourceCharacter.id);
  moving.maps=[{...moving.maps[0],grid:{...moving.maps[0].grid,cellSizePx:100,originPx:{x:0,y:0},metersPerCell:1},annotations:[{id:crypto.randomUUID(),kind:'wall',name:'Скрытая преграда',visible:false,destructible:false,hp:10,from:{x:300,y:0},to:{x:300,y:4000}}]}];moving.tokens=[{id:crypto.randomUUID(),characterId:sourceCharacter.id,mapId:moving.maps[0].id,column:1,row:1}];moving.view={activeMapId:moving.maps[0].id,cameras:{[moving.maps[0].id]:{x:16,y:16,zoom:0.1}}};
  await writeFile(movePath,JSON.stringify(moving));await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},movePath);await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();
  await page.getByRole('button',{name:'Токен: Борис',exact:true}).click();await expect(page.getByTestId('movement-budget')).toHaveText('8');await expect(page.getByLabel('Доступная область движения',{exact:true})).toBeVisible();
@@ -414,6 +414,36 @@ try {
  await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();const movedParty=JSON.parse(await readFile(movePath,'utf8'));assert.equal(movedParty.tokens[0].column,3);assert.equal(movedParty.tokens[0].row,2);
  await application.close();application=await launch();page=await application.firstWindow();page.on('pageerror',error=>errors.push(error.message));await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},movePath);await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();await page.getByRole('button',{name:'Токен: Борис',exact:true}).click();await expect(page.getByTestId('movement-budget')).toHaveText('8');
  await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();
+ console.log('Подготовка и проведение игры');
+ await expect(page.getByRole('button',{name:'Начать игру',exact:true})).toBeEnabled();
+ await page.getByRole('button',{name:'Начать игру',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'Поля',exact:true})).toBeVisible();
+ await expect(page.getByRole('tab',{name:'Правила',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Калибровать по отрезку',exact:true})).toBeHidden();
+ await expect(page.getByLabel('Тактическое движение (расход ОД)',{exact:true})).not.toBeChecked();
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
+ await expect(page.getByLabel('Имя персонажа')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'На карту: Борис',exact:true})).toBeVisible();
+ await page.getByRole('tab',{name:'Предметы',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Создать шаблон',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const startedParty=JSON.parse(await readFile(path,'utf8'));
+ assert.deepEqual(startedParty.characters,sourceParty.characters);assert.deepEqual(startedParty.items,sourceParty.items);assert.deepEqual(startedParty.abilities,sourceParty.abilities);assert.deepEqual(startedParty.tokens,sourceParty.tokens);
+ assert.deepEqual(startedParty.session,{started:true,tacticalMovement:false});
+ await page.getByLabel('Тактическое движение (расход ОД)',{exact:true}).check();
+ await page.getByRole('button',{name:'Открыть конфигуратор',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'Правила',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Калибровать по отрезку',exact:true})).toBeVisible();
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();await expect(page.getByLabel('Имя персонажа')).toBeVisible();
+ await page.getByRole('button',{name:'Вернуться в игру',exact:true}).click();
+ await expect(page.getByLabel('Тактическое движение (расход ОД)',{exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const resumedParty=JSON.parse(await readFile(path,'utf8'));
+ assert.deepEqual(resumedParty.characters,sourceParty.characters);assert.deepEqual(resumedParty.items,sourceParty.items);assert.deepEqual(resumedParty.abilities,sourceParty.abilities);assert.deepEqual(resumedParty.tokens,sourceParty.tokens);
+ assert.deepEqual(resumedParty.session,{started:true,tacticalMovement:true});
+ await application.close();application=await launch();page=await application.firstWindow();page.on('pageerror',error=>errors.push(error.message));await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);
+ await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'Поля',exact:true})).toBeVisible();await expect(page.getByLabel('Тактическое движение (расход ОД)',{exact:true})).toBeChecked();
  await writeFile(path, '{broken');
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
@@ -428,8 +458,8 @@ try {
  await page.getByLabel('Название партии').waitFor();
  assert.equal(await page.getByRole('tab').count(),0);
  await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();
- await page.getByRole('tab',{name:'Карты',exact:true}).waitFor();
+ await page.getByRole('tab',{name:'Поля',exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  await page.screenshot({path:join(temporary,'window.png')});
- console.log('PASS: стены, путь, диагональ, ОД, отмена, расстановка и перезапуск;  способности, счётчики, перенос со снаряжением и блокировка несовместимости;  фото предметов, поиск, drag-and-drop шаблонов/вещей, импорт JSON и проверка ключей;  шаблоны, независимые ресурсы, передача, снимки версий, перезапуск и общий запас;  правила, зависимости, расчёт 22, отказ цикла, сохранение персонажа и перезапуск;  пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
+ console.log('PASS: подготовка/игра, конфигуратор без сброса и восстановление сессии; стены, путь, диагональ, ОД, отмена, расстановка и перезапуск;  способности, счётчики, перенос со снаряжением и блокировка несовместимости;  фото предметов, поиск, drag-and-drop шаблонов/вещей, импорт JSON и проверка ключей;  шаблоны, независимые ресурсы, передача, снимки версий, перезапуск и общий запас;  правила, зависимости, расчёт 22, отказ цикла, сохранение персонажа и перезапуск;  пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
 } finally { if(application) application.process().kill('SIGKILL'); await rm(temporary,{recursive:true,force:true}); }

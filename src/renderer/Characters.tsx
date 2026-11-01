@@ -3,7 +3,7 @@ import {movementBudget} from '../domain/movement-action.js';
 import {evaluateStats} from '../domain/rules/evaluate.js';
 import {CharacterValues} from './CharacterValues.js';
 import { characterSchema, type Campaign, type Character } from '../shared/campaign.js';
-export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValues}: {campaign:Campaign;onCreate:(character:Character)=>void;onDelete:(id:string)=>void;onPlace:(id:string)=>void;onMessage:(message:string)=>void;onValues:(id:string,values:Record<string,number>)=>boolean}) {
+export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValues,configure=true}: {campaign:Campaign;onCreate:(character:Character)=>void;onDelete:(id:string)=>void;onPlace:(id:string)=>void;onMessage:(message:string)=>void;onValues:(id:string,values:Record<string,number>)=>boolean;configure?:boolean}) {
  const [creationValues,setCreationValues]=useState<Record<string,string>>({});
  useEffect(()=>setCreationValues(Object.fromEntries(campaign.ruleset.stats.filter(stat=>stat.kind==='base').map(stat=>[stat.key,String(stat.kind==='base'?stat.defaultValue:0)]))),[campaign.ruleset.id,campaign.ruleset.revision]);
  const [statsId,setStatsId]=useState<string|null>(null);
@@ -11,7 +11,7 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  const [portrait,setPortrait]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  return <section className="characters">
  <h2>Персонажи и NPC</h2>
- <form noValidate onSubmit={event=>{
+ {configure&&<form noValidate onSubmit={event=>{
   event.preventDefault();const values=Object.fromEntries(Object.entries(creationValues).map(([key,value])=>[key,value.trim()?Number(value):NaN]));const parsed=characterSchema.safeParse({id:crypto.randomUUID(),name,kind,footprint:{width:Number(width),height:Number(height)},portrait,values});
   if(!parsed.success){setError('Введите имя (1–120 символов) и целую ширину/высоту от 1 до 10 клеток и числовые характеристики.');return;}
   if(campaign.characters.length>=200){setError('Предел — 200 персонажей в партии.');return;}
@@ -31,16 +31,16 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  }}>Выбрать портрет…</button>{portrait&&<button type="button" onClick={()=>setPortrait(null)}>Убрать портрет</button>}<button disabled={busy}>Добавить персонажа</button></div>
  {error&&<p role="alert">{error}</p>}
  <p className="hint">Портрет необязателен: без него токен показывает первую букву имени. Размещение: нажмите «На карту», затем щёлкните свободную клетку. Занятые клетки и выход за карту не допускаются.</p>
- </form>
+ </form>}
  <div className="character-list">{campaign.characters.map(character=><article key={character.id}>
  {character.portrait&&<img className="portrait-preview" src={character.portrait} alt="" />}<strong>{character.name}</strong><span>{character.kind==='npc'?'NPC':'Персонаж'} · {character.footprint.width}×{character.footprint.height}</span>
  <CharacterSummary character={character} campaign={campaign}/>
  <div className="character-equipment"><strong>Способности:</strong>{campaign.abilities.filter(ability=>ability.ownerId===character.id).map(ability=><span key={ability.id}>{ability.definition.name} · {ability.definition.maxUses?`${ability.usesRemaining}/${ability.definition.maxUses}`:'без лимита'}</span>)}</div>
  <div className="character-equipment"><strong>Предметы:</strong> {campaign.items.filter(item=>item.ownerId===character.id).length?campaign.items.filter(item=>item.ownerId===character.id).map(item=><span key={item.id}>{item.template.name} · прочность {item.durability}/{item.template.maxDurability} · заряды {item.charges}/{item.template.maxCharges}{item.equipped?' · экипирован':''}</span>):<span>Нет предметов. Выдайте их во вкладке «Предметы».</span>}</div>
- <button onClick={()=>setStatsId(statsId===character.id?null:character.id)}>Характеристики: {character.name}</button>
+ {configure&&<button onClick={()=>setStatsId(statsId===character.id?null:character.id)}>Характеристики: {character.name}</button>}
  <button disabled={!campaign.view.activeMapId} onClick={()=>onPlace(character.id)}>На карту: {character.name}</button>
- <button className="secondary" onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт? Предметы вернутся в общий запас; назначенные способности удалятся.`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>
- {statsId===character.id&&<CharacterValues character={character} rules={campaign.ruleset} onSave={values=>onValues(character.id,values)}/>}
+ {configure&&<button className="secondary" onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт? Предметы вернутся в общий запас; назначенные способности удалятся.`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>}
+ {configure&&statsId===character.id&&<CharacterValues character={character} rules={campaign.ruleset} onSave={values=>onValues(character.id,values)}/>}
  </article>)}</div>
  </section>;
 }

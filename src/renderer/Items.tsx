@@ -2,7 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {itemTemplateSchema,itemInstanceSchema,categoryNames,type ItemTemplate,type ItemInstance} from '../shared/items.js';
 import type {Campaign} from '../shared/campaign.js';
 import {createItem,transferItem} from '../domain/items.js';
-export function Items({campaign,onTemplates,onItems}:{campaign:Campaign;onTemplates:(templates:ItemTemplate[])=>boolean;onItems:(items:ItemInstance[])=>boolean}){
+export function Items({campaign,onTemplates,onItems,configure=true}:{campaign:Campaign;onTemplates:(templates:ItemTemplate[])=>boolean;onItems:(items:ItemInstance[])=>boolean;configure?:boolean}){
  const [editing,setEditing]=useState<ItemTemplate|null>(null),[name,setName]=useState(''),[category,setCategory]=useState<ItemTemplate['category']>('other'),[description,setDescription]=useState(''),[damage,setDamage]=useState('1d6'),[durability,setDurability]=useState('100'),[charges,setCharges]=useState('0');
  const [image,setImage]=useState<string|null>(null),[imageBusy,setImageBusy]=useState(false);
  const [owner,setOwner]=useState(''),[filter,setFilter]=useState('all'),[error,setError]=useState('');
@@ -10,7 +10,7 @@ export function Items({campaign,onTemplates,onItems}:{campaign:Campaign;onTempla
  function reset(){setEditing(null);setImage(null);setName('');setCategory('other');setDescription('');setDamage('1d6');setDurability('100');setCharges('0');setError('');}
  function edit(template:ItemTemplate){setEditing(template);setImage(template.image);setName(template.name);setCategory(template.category);setDescription(template.description);setDamage(template.damageDice??'1d6');setDurability(String(template.maxDurability));setCharges(String(template.maxCharges));setError('');}
  return <section className="items-panel"><h2>Каталог предметов</h2><p>Шаблон описывает предмет. Выданные экземпляры имеют собственную прочность и заряды. Изменение шаблона не меняет уже выданные вещи.</p>
- <form noValidate onSubmit={event=>{
+ {configure&&<form noValidate onSubmit={event=>{
   event.preventDefault();const existing=campaign.itemTemplates.find(template=>template.id===editing?.id);
   const parsed=itemTemplateSchema.safeParse({id:editing?.id??crypto.randomUUID(),revision:(existing?.revision??0)+1,image,name,category,description,damageDice:category==='weapon'?damage:null,maxDurability:durability.trim()?Number(durability):NaN,maxCharges:charges.trim()?Number(charges):NaN});
   if(!parsed.success){setError('Введите название (1–120), описание до 2000 символов, целые максимумы 0–100000. Для оружия: кости вида 1d6 или 2d6+1 (1–99 костей, 2–1000 граней).');return;}
@@ -26,12 +26,12 @@ export function Items({campaign,onTemplates,onItems}:{campaign:Campaign;onTempla
  <label>Описание предмета<textarea maxLength={2000} value={description} onChange={event=>setDescription(event.target.value)}/></label>
  <div className="character-actions">{image&&<img className="item-photo" src={image} alt="Фото предмета"/>}<button type="button" disabled={imageBusy} onClick={async()=>{setImageBusy(true);try{const result=await window.campaigns.importPortrait();if(!result.ok)setError(result.error);else if(result.value)setImage(result.value);}catch{setError('Не удалось загрузить фотографию.');}finally{setImageBusy(false);}}}>Загрузить фото предмета…</button>{image&&<button type="button" className="secondary" onClick={()=>setImage(null)}>Убрать фото</button>}</div>
  <button disabled={imageBusy}>{editing?'Сохранить шаблон':'Создать шаблон'}</button>{editing&&<button type="button" className="secondary" onClick={reset}>Отменить редактирование</button>}
- {error&&<p role="alert">{error}</p>}</form>
+ {error&&<p role="alert">{error}</p>}</form>}
  <label>Кому выдать новый экземпляр<select aria-label="Кому выдать новый экземпляр" value={owner} onChange={event=>setOwner(event.target.value)}><option value="">Общий запас</option>{campaign.characters.map(character=><option key={character.id} value={character.id}>{character.name}</option>)}</select></label>
  <div className="item-templates">{campaign.itemTemplates.map(template=><article key={template.id}>{template.image&&<img className="item-photo" src={template.image} alt={template.name}/>}<h3>{template.name}</h3><p>{categoryNames[template.category]} · версия {template.revision}{template.damageDice?` · урон ${template.damageDice}`:''}</p><p>{template.description}</p>
  <button onClick={()=>{if(onItems([...campaign.items,createItem(template,owner||null)]))setError('');else setError('Не удалось выдать предмет. Предел 1000 экземпляров; выберите существующего персонажа.');}}>Выдать: {template.name}</button>
- <button className="secondary" onClick={()=>edit(template)}>Редактировать: {template.name}</button>
- <button className="secondary" onClick={()=>{if(window.confirm(`Удалить шаблон ${template.name}? Выданные экземпляры останутся.`)){onTemplates(campaign.itemTemplates.filter(item=>item.id!==template.id));if(editing?.id===template.id)reset();}}}>Удалить шаблон: {template.name}</button>
+ {configure&&<button className="secondary" onClick={()=>edit(template)}>Редактировать: {template.name}</button>}
+ {configure&&<button className="secondary" onClick={()=>{if(window.confirm(`Удалить шаблон ${template.name}? Выданные экземпляры останутся.`)){onTemplates(campaign.itemTemplates.filter(item=>item.id!==template.id));if(editing?.id===template.id)reset();}}}>Удалить шаблон: {template.name}</button>}
  </article>)}</div>
  <h2>Инвентарь партии</h2><label>Показать инвентарь<select aria-label="Показать инвентарь" value={filter} onChange={event=>setFilter(event.target.value)}><option value="all">Все экземпляры</option><option value="stash">Общий запас</option>{campaign.characters.map(character=><option key={character.id} value={character.id}>{character.name}</option>)}</select></label>
  <div className="item-instances">{campaign.items.filter(item=>filter==='all'||filter==='stash'&&item.ownerId===null||item.ownerId===filter).map(item=><Instance key={item.id} item={item} campaign={campaign} onChange={next=>onItems(campaign.items.map(existing=>existing.id===next.id?next:existing))} onDelete={()=>{if(window.confirm(`Удалить экземпляр ${item.template.name}?`))onItems(campaign.items.filter(existing=>existing.id!==item.id));}}/>)}</div>
