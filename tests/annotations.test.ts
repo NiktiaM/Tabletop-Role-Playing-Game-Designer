@@ -22,7 +22,7 @@ test('разметка проверяется относительно свое�
  expect(mapSchema.safeParse({...map,annotations:[{...base,kind:'light',center:{x:101,y:90},radius:80}]}).success).toBe(false);
 });
 test('миграция v5 сохраняет каталог и камеры, v6 восстанавливает разметку разных карт',()=>{
- const c=createCampaign('Разметка');c.characters.push({id:crypto.randomUUID(),name:'NPC',kind:'npc',footprint:{width:1,height:1},portrait:null});const {annotations,...oldMap}=map;
+ const c=createCampaign('Разметка');c.characters.push({id:crypto.randomUUID(),name:'NPC',values:{},kind:'npc',footprint:{width:1,height:1},portrait:null});const {annotations,...oldMap}=map;
  const old={...c,schemaVersion:5,maps:[oldMap],view:{activeMapId:map.id,cameras:{[map.id]:{x:10,y:-20,zoom:0.5}}}};
  const migrated=parseCampaign(old);expect(migrated.maps[0].annotations).toEqual([]);expect(migrated.view).toEqual(old.view);expect(migrated.characters).toEqual(old.characters);expect(old.schemaVersion).toBe(5);
  const second={...map,id:crypto.randomUUID(),annotations:[]};const next={...c,maps:[map,second]};

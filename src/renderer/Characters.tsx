@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import {CharacterValues} from './CharacterValues.js';
 import { characterSchema, type Campaign, type Character } from '../shared/campaign.js';
-export function Characters({campaign,onCreate,onDelete,onPlace,onMessage}: {campaign:Campaign;onCreate:(character:Character)=>void;onDelete:(id:string)=>void;onPlace:(id:string)=>void;onMessage:(message:string)=>void}) {
+export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValues}: {campaign:Campaign;onCreate:(character:Character)=>void;onDelete:(id:string)=>void;onPlace:(id:string)=>void;onMessage:(message:string)=>void;onValues:(id:string,values:Record<string,number>)=>boolean}) {
+ const [statsId,setStatsId]=useState<string|null>(null);
  const [name,setName]=useState(''),[kind,setKind]=useState('character'),[width,setWidth]=useState('1'),[height,setHeight]=useState('1');
  const [portrait,setPortrait]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  return <section className="characters">
@@ -25,8 +27,10 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage}: {camp
  </form>
  <div className="character-list">{campaign.characters.map(character=><article key={character.id}>
  {character.portrait&&<img className="portrait-preview" src={character.portrait} alt="" />}<strong>{character.name}</strong><span>{character.kind==='npc'?'NPC':'Персонаж'} · {character.footprint.width}×{character.footprint.height}</span>
+ <button onClick={()=>setStatsId(statsId===character.id?null:character.id)}>Характеристики: {character.name}</button>
  <button disabled={!campaign.view.activeMapId} onClick={()=>onPlace(character.id)}>На карту: {character.name}</button>
  <button className="secondary" onClick={()=>{if(window.confirm(`Удалить ${character.name} и все его токены со всех карт?`)){onDelete(character.id);onMessage('Персонаж и его токены удалены.');}}}>Удалить: {character.name}</button>
+ {statsId===character.id&&<CharacterValues character={character} rules={campaign.ruleset} onSave={values=>onValues(character.id,values)}/>}
  </article>)}</div>
  </section>;
 }

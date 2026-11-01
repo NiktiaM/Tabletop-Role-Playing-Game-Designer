@@ -112,7 +112,7 @@ try {
  await application.evaluate(({dialog}, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, path);
  await page.getByRole('button', {name:'Сохранить как…'}).click();
  await page.getByText('Все изменения сохранены', {exact:true}).waitFor();
- const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,6);
+ const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,7);
  assert.deepEqual(saved.maps[0].grid,{metersPerCell:1,locationKind:'custom',cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true});
  const savedCamera = saved.view.cameras[saved.view.activeMapId]; assert.ok(savedCamera.zoom > 0);
  await application.close(); console.log('Запуск Electron'); application = await launch(); page = await application.firstWindow();
@@ -271,6 +271,40 @@ try {
  const markedReopened=JSON.parse(await readFile(path,'utf8'));assert.deepEqual(markedReopened.maps[0].annotations,marked.maps[0].annotations);assert.deepEqual(markedReopened.view,marked.view);
  await page.getByRole('button',{name:'Лампа · Свет',exact:true}).click();await page.getByRole('button',{name:'Удалить выбранное',exact:true}).click();await expect(page.locator('[data-annotation]')).toHaveCount(4);
  await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ console.log('Редактор правил и расчёт персонажа');
+ await page.getByRole('tab',{name:'Правила',exact:true}).click();
+ await page.getByLabel('Название правил').fill('Проверенные правила');
+ await page.getByRole('button',{name:'Добавить исходный показатель',exact:true}).click();
+ await page.getByLabel('Ключ показателя 1',{exact:true}).fill('body');await page.getByLabel('Название показателя 1',{exact:true}).fill('Тело');await page.getByLabel('Значение по умолчанию 1',{exact:true}).fill('5');
+ await page.getByRole('button',{name:'Добавить исходный показатель',exact:true}).click();
+ await page.getByLabel('Ключ показателя 2',{exact:true}).fill('level');await page.getByLabel('Название показателя 2',{exact:true}).fill('Уровень');await page.getByLabel('Значение по умолчанию 2',{exact:true}).fill('1');
+ await page.getByRole('button',{name:'Добавить вычисляемый показатель',exact:true}).click();
+ await page.getByLabel('Ключ показателя 3',{exact:true}).fill('hp');await page.getByLabel('Название показателя 3',{exact:true}).fill('Максимум');await page.getByLabel('Формула показателя 3',{exact:true}).fill('(body + level) * 2');
+ await page.getByRole('button',{name:'Применить правила',exact:true}).click();
+ await expect(page.locator('[data-result="hp"]')).toHaveText('12');
+ await page.getByLabel('Источник значений').selectOption({label:'Алекс'});await page.getByLabel('Ввод: Тело',{exact:true}).fill('10');
+ await expect(page.locator('[data-result="hp"]')).toHaveText('22');
+ await page.getByRole('button',{name:'Сохранить значения персонажа',exact:true}).click();
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
+ await page.getByRole('button',{name:'Характеристики: Алекс',exact:true}).click();
+ await expect(page.getByLabel('Значение: Тело',{exact:true})).toHaveValue('10');
+ await page.getByLabel('Значение: Тело',{exact:true}).fill('11');await page.getByRole('button',{name:'Применить характеристики',exact:true}).click();
+ await page.getByRole('tab',{name:'Правила',exact:true}).click();await expect(page.locator('[data-result="hp"]')).toHaveText('24');
+ await page.getByLabel('Ввод: Тело',{exact:true}).fill('10');await page.getByRole('button',{name:'Сохранить значения персонажа',exact:true}).click();
+ await expect(page.locator('[data-result="hp"]')).toHaveText('22');
+
+ await page.getByLabel('Формула показателя 3',{exact:true}).fill('hp + 1');await page.getByRole('button',{name:'Применить правила',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Циклическая'}).waitFor();await expect(page.locator('[data-result="hp"]')).toHaveText('22');
+ await page.getByRole('button',{name:'Сбросить черновик правил',exact:true}).click();
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const withRules=JSON.parse(await readFile(path,'utf8'));assert.equal(withRules.ruleset.revision,2);assert.equal(withRules.characters[0].values.body,10);
+ await application.close();application=await launch();page=await application.firstWindow();page.on('pageerror',error=>errors.push(error.message));
+ await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);
+ await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();await page.getByRole('tab',{name:'Правила',exact:true}).click();
+ await expect(page.getByLabel('Название правил')).toHaveValue('Проверенные правила');
+ await page.getByLabel('Источник значений').selectOption({label:'Алекс'});await expect(page.locator('[data-result="hp"]')).toHaveText('22');
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const rulesReopened=JSON.parse(await readFile(path,'utf8'));assert.deepEqual(rulesReopened.ruleset,withRules.ruleset);assert.deepEqual(rulesReopened.characters[0].values,withRules.characters[0].values);
  await writeFile(path, '{broken');
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
@@ -288,5 +322,5 @@ try {
  await page.getByRole('tab',{name:'Карты',exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  await page.screenshot({path:join(temporary,'window.png')});
- console.log('PASS: пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
+ console.log('PASS: правила, зависимости, расчёт 22, отказ цикла, сохранение персонажа и перезапуск;  пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
 } finally { if(application) application.process().kill('SIGKILL'); await rm(temporary,{recursive:true,force:true}); }

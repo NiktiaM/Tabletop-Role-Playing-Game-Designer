@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {rulesetSchema,emptyRuleset,statKey} from './rules.js';
 import { annotationSchema } from './annotations.js';
 import { footprintFits, footprintsOverlap } from '../domain/tokens.js';
 const metadata = {
@@ -30,6 +31,7 @@ export const mapSchema = z.object({
 });
 export const portraitSchema = z.string().max(2*1024*1024).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/);
 export const characterSchema = z.object({
+ values:z.record(statKey,z.number().finite().min(-1e9).max(1e9)).refine(values=>Object.keys(values).length<=256).default({}),
  id:z.uuid(), name:z.string().trim().min(1).max(120), kind:z.enum(['character','npc']),
  footprint:z.object({width:z.number().int().min(1).max(10),height:z.number().int().min(1).max(10)}).strict(),
  portrait:portraitSchema.nullable(),
@@ -38,7 +40,7 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(6), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(7), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   const ids = new Set(c.maps.map(m => m.id));
@@ -59,10 +61,10 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 6, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 7, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5)) {
-    return campaignSchema.parse({ ...input, schemaVersion: 6 });
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6)) {
+    return campaignSchema.parse({ ...input, schemaVersion: 7 });
   }
   return campaignSchema.parse(input);
 }
@@ -79,5 +81,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 6, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 7, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }
