@@ -8,21 +8,73 @@ let application;
 try {
  const path = join(temporary, 'партия.json');
  const launch = () => electron.launch({ args: [...(process.env.CI ? ['--no-sandbox'] : []), '.'] });
- application = await launch();
+ console.log('Запуск Electron'); application = await launch();
  let page = await application.firstWindow();
- const errors = []; page.on('pageerror', e => errors.push(e.message));
+ await page.getByLabel('Название партии').waitFor();
+ const cdp = await page.context().newCDPSession(page);
+ const cspResult = await cdp.send('Runtime.evaluate', {expression: "(() => {try {Function('return 1')(); return false;} catch {return true;}})()", allowUnsafeEvalBlockedByCSP:false, returnByValue:true});
+ assert.equal(cspResult.result.value,true,'CSP must forbid dynamic code generation');
+ await cdp.detach();
+ const errors = []; page.setDefaultTimeout(15000); page.on('pageerror', e => {errors.push(e.message); console.error(e.message);}); page.on('console', m => {if(m.type()==='error') console.error(m.text());});
  await page.getByLabel('Название партии').fill('Побег из Лейквью');
  await page.getByRole('button', { name: 'Создать партию', exact: true }).click();
  await page.getByRole('heading', { name: 'Побег из Лейквью', exact: true }).waitFor();
+ const pngPath = join(temporary, 'План.png'); const jpgPath = join(temporary, 'Этаж.jpg');
+ console.log('Подготовка карт'); const fixtures = await application.evaluate(({nativeImage}) => {
+   const bitmap = Buffer.alloc(4000*4000*4);
+   for(let i=0;i<bitmap.length;i+=4) {bitmap[i]=35;bitmap[i+1]=55;bitmap[i+2]=220;bitmap[i+3]=255;}
+   const image = nativeImage.createFromBitmap(bitmap, {width:4000,height:4000});
+   return {png: image.toPNG().toString('base64'), jpg: image.toJPEG(90).toString('base64')};
+ });
+ await writeFile(pngPath,Buffer.from(fixtures.png,'base64')); await writeFile(jpgPath,Buffer.from(fixtures.jpg,'base64'));
+ const importMap = async file => {
+   await application.evaluate(({dialog}, path) => { dialog.showOpenDialog = async () => ({canceled:false,filePaths:[path]}); }, file);
+   await page.getByRole('button',{name:'Добавить карту…'}).click();
+   await page.getByText('Загрузка карты…',{exact:true}).waitFor({state:'hidden'});
+   try { await page.locator('.board canvas').waitFor(); } catch(e) {console.error(await page.locator('body').innerText()); throw e;}
+   assert.equal(await page.getByRole('alert').count(),0);
+ };
+ console.log('Импорт PNG'); await importMap(pngPath); console.log('Импорт JPEG'); await importMap(jpgPath); console.log('Камера');
+ assert.equal(await page.locator('#map-select option').count(),2);
+ await page.getByLabel('Текущая карта').selectOption({label:'План.png'});
+ await page.locator('.board canvas').waitFor();
+ await page.getByRole('button',{name:'Вписать карту'}).click();
+ const beforeZoom = await page.locator('.board-tools span').innerText();
+ const bounds = await page.locator('.board').boundingBox();
+ await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);
+ await page.mouse.wheel(0,-250); await page.waitForTimeout(150);
+ assert.notEqual(await page.locator('.board-tools span').innerText(),beforeZoom,'Колесо должно менять масштаб');
+ await page.mouse.down(); await page.mouse.move(bounds.x+bounds.width/2+40,bounds.y+bounds.height/2+30); await page.mouse.up();
+ console.log('Пиксели'); const screenshot = await page.locator('.board canvas').screenshot();
+ console.log('Чтение пикселей'); const pixel = await application.evaluate(({nativeImage}, bytes) => {
+   const image = nativeImage.createFromBuffer(Buffer.from(bytes)); const {width,height}=image.getSize();
+   const bitmap = image.toBitmap(); const i=(Math.floor(height/2)*width+Math.floor(width/2))*4;
+   return [...bitmap.subarray(i,i+4)];
+ }, [...screenshot]);
+ assert.ok(pixel[2] > 150 && pixel[0] < 100, `Карта должна быть видна в canvas: ${pixel}`);
+ console.log('Повреждённая карта'); const invalidPath=join(temporary,'broken.png'); await writeFile(invalidPath,'not an image');
+ await application.evaluate(({dialog}, path) => {dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},invalidPath);
+ await page.getByRole('button',{name:'Добавить карту…'}).click();
+ await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
+ assert.equal(await page.locator('#map-select option').count(),2);
  await application.evaluate(({dialog}, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, path);
  await page.getByRole('button', {name:'Сохранить как…'}).click();
  await page.getByText('Все изменения сохранены', {exact:true}).waitFor();
- const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью');
- await application.close(); application = await launch(); page = await application.firstWindow();
+ const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,2);
+ const savedCamera = saved.view.cameras[saved.view.activeMapId]; assert.ok(savedCamera.zoom > 0);
+ await application.close(); console.log('Запуск Electron'); application = await launch(); page = await application.firstWindow();
  page.on('pageerror', e => errors.push(e.message));
  await application.evaluate(({dialog}, path) => { dialog.showOpenDialog = async () => ({canceled:false, filePaths:[path]}); }, path);
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).waitFor();
+ await page.locator('.board canvas').waitFor();
+ await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ assert.equal(await page.getByLabel('Текущая карта').inputValue(), saved.view.activeMapId);
+ assert.equal(await page.locator('#map-select option').count(),2);
+ await application.evaluate(({dialog}, path) => {dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);
+ await page.getByRole('button',{name:'Сохранить как…'}).click();
+ await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const reopened=JSON.parse(await readFile(path,'utf8')); assert.deepEqual(reopened.view,saved.view); assert.deepEqual(reopened.maps,saved.maps);
  await writeFile(path, '{broken');
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
@@ -32,5 +84,5 @@ try {
  assert.equal(await page.getByRole('heading',{name:'Побег из Лейквью',exact:true}).count(),1);
  assert.deepEqual(errors,[]);
  await page.screenshot({path:join(temporary,'window.png')});
- console.log('PASS: Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
-} finally { if(application) await application.close(); await rm(temporary,{recursive:true,force:true}); }
+ console.log('PASS: PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
+} finally { if(application) application.process().kill('SIGKILL'); await rm(temporary,{recursive:true,force:true}); }

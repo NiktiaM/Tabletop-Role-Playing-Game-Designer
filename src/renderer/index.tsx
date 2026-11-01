@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Campaign, CampaignAPI } from '../shared/campaign.js';
 import './style.css';
+import { Board } from './board/Board.js';
+import type { Camera } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -20,6 +22,14 @@ function App() {
     try { await action(); } catch { setMessage('Нет связи с приложением. Запустите через npm run dev.'); }
     finally { setBusy(false); }
   }
+  const activeMap = campaign?.maps.find(m => m.id === campaign.view.activeMapId);
+  function updateCamera(camera: Camera) {
+    setCampaign(previous => {
+      if (!previous || !previous.view.activeMapId) return previous;
+      return { ...previous, view: { ...previous.view, cameras: { ...previous.view.cameras, [previous.view.activeMapId]: camera } } };
+    });
+    setDirty(true);
+  }
   return <main>
     <header><span className="badge">R PRISON · МАСТЕРСКАЯ</span><h1>Ваши истории начинаются здесь</h1><p>Локальные партии. Ваш мир, ваши правила.</p></header>
     <section className="actions"><form onSubmit={e => { e.preventDefault(); if (!canReplace()) return; void run(async () => { const r = await window.campaigns.create(name); if (!r.ok) { setMessage(r.error); return; } setCampaign(r.value); setDirty(true); setMessage('Партия создана. Сохраните её в файл.'); }); }}>
@@ -27,7 +37,20 @@ function App() {
       <button disabled={busy || !name.trim()}>Создать партию</button>
     </form><article><h2>Продолжить историю</h2><p>Откройте сохранённую партию с этого компьютера.</p><button className="secondary" disabled={busy} onClick={() => { if (!canReplace()) return; void run(async () => { const r = await window.campaigns.open(); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Открыто: ${r.value.fileName}`); } }); }}>Открыть партию…</button></article></section>
     <section className="current"><div><span className="badge">ТЕКУЩАЯ ПАРТИЯ</span><h2>{campaign?.name ?? 'Партия не выбрана'}</h2><p>{campaign ? (dirty ? 'Есть несохранённые изменения' : 'Все изменения сохранены') : 'Карты, персонажи и игровой стол появятся в следующих итерациях.'}</p></div><button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></section>
-    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 1 · Данные остаются на вашем компьютере</footer>
+    {campaign && <section className="maps" inert={busy}><div className="maps-header"><h2>Карты партии</h2><button disabled={busy || campaign.maps.length >= 20} onClick={() => void run(async () => {
+      const result = await window.campaigns.importMap();
+      if (!result.ok) { setMessage(result.error); return; }
+      const map = result.value;
+      if (!map) return;
+      setCampaign(previous => previous ? { ...previous, maps: [...previous.maps, map], view: { ...previous.view, activeMapId: map.id } } : previous);
+      setDirty(true); setMessage(`Добавлена карта: ${map.name}. Сохраните партию.`);
+    })}>Добавить карту…</button></div>
+    <p className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
+    {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
+      {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
+    </select>{activeMap && <Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} />}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </section>}
+    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 2 · Данные остаются на вашем компьютере</footer>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);
