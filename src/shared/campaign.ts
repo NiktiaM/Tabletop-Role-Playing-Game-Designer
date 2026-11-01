@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {rPrisonDraft} from '../domain/presets/rprison.js';
 import {rulesetSchema,emptyRuleset,statKey} from './rules.js';
 import { annotationSchema } from './annotations.js';
 import { footprintFits, footprintsOverlap } from '../domain/tokens.js';
@@ -81,5 +82,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 7, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 7, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }

@@ -1,3 +1,5 @@
+import {rPrisonDraft} from '../domain/presets/rprison.js';
+import {RuleExamples} from './RuleExamples.js';
 import React,{useEffect,useState} from 'react';
 import {rulesetSchema,type Ruleset,type StatDefinition} from '../shared/rules.js';
 import type {Character} from '../shared/campaign.js';
@@ -18,6 +20,14 @@ export function Rules({rules,characters,onRules,onValues}:{rules:Ruleset;charact
  let calculation:ReturnType<typeof evaluateStats>=[],calculationError='';
  try{calculation=evaluateStats(rules,numericInputs());}catch(error){calculationError=error instanceof Error?error.message:'Не удалось рассчитать';}
  return <section className="rules-panel"><h2>Правила партии</h2>
+ <p>Обычно вручную писать формулы не нужно: выберите готовый набор. Редактор ниже нужен для изменения вашей системы.</p>
+ <button onClick={()=>{
+  if(rules.stats.length&&!window.confirm('Заменить применённые правила набором R Prison v1.1 — черновик? Текущие определения будут заменены; значения персонажей сохранятся по ключам, проверьте соответствие характеристик.'))return;
+  const preset={...rPrisonDraft(),id:rules.id,revision:rules.revision+1};
+  if(onRules(preset)){setError('');setNotice('Готовые формулы R Prison применены. Проверьте характеристики существующих персонажей и сохраните партию.');}
+ }}>Использовать R Prison — черновик</button>
+ <p className="hint">В наборе: Сила, Ловкость, Телосложение, Харизма, уровень, броня, максимум HP/ОД и бонусы урона. Броня прибавляется к максимуму HP по v1.1; поглощение урона не назначено. Значения 5/5/5/5 — начальное предложение, их можно изменить. Текущие HP и ОД пока не ведутся.</p>
+ <RuleExamples/>
  <p className="hint">Применённая версия: {rules.revision}. Правила хранятся внутри этой партии. Редактирование здесь не меняет другие партии. Сначала настройте и примените показатели, затем проверьте расчёт ниже.</p>
  <label>Название правил<input maxLength={120} value={draft.name} onChange={event=>{setDraft({...draft,name:event.target.value});setNotice('');}}/></label>
  <div className="rule-list">{draft.stats.map((stat,index)=><article key={index}>

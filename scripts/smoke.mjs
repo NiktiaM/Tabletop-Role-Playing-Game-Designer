@@ -176,11 +176,15 @@ try {
  await page.getByLabel('Смещение X, пикс.').fill('0');await page.getByLabel('Смещение Y, пикс.').fill('0');
  await page.getByRole('button',{name:'Применить сетку'}).click();
  await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
+ await page.getByLabel('Создание: Телосложение',{exact:true}).fill('10');
+ await page.getByLabel('Создание: Ловкость',{exact:true}).fill('8');
  await page.getByLabel('Имя персонажа').fill('Алекс');await page.getByLabel('Ширина, клеток').fill('2');await page.getByLabel('Высота, клеток').fill('1');
  await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},pngPath);
  await page.getByRole('button',{name:'Выбрать портрет…'}).click();await page.getByAltText('Новый портрет').waitFor();
  await page.getByRole('button',{name:'Добавить персонажа',exact:true}).click();
  await page.getByRole('button',{name:'На карту: Алекс',exact:true}).waitFor();
+ await expect(page.locator('.character-summary')).toContainText('HP (максимум): 22');
+ await expect(page.locator('.character-summary')).toContainText('ОД (максимум): 8');
  const cam=calibrated.view.cameras[calibrated.view.activeMapId];
  const placeAlex=async(column,row)=>{
   await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
@@ -273,6 +277,7 @@ try {
  await page.getByRole('button',{name:'Сохранить как…'}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
  console.log('Редактор правил и расчёт персонажа');
  await page.getByRole('tab',{name:'Правила',exact:true}).click();
+ while(await page.getByRole('button',{name:'Удалить показатель 1',exact:true}).count()) await page.getByRole('button',{name:'Удалить показатель 1',exact:true}).click();
  await page.getByLabel('Название правил').fill('Проверенные правила');
  await page.getByRole('button',{name:'Добавить исходный показатель',exact:true}).click();
  await page.getByLabel('Ключ показателя 1',{exact:true}).fill('body');await page.getByLabel('Название показателя 1',{exact:true}).fill('Тело');await page.getByLabel('Значение по умолчанию 1',{exact:true}).fill('5');
@@ -305,6 +310,16 @@ try {
  await page.getByLabel('Источник значений').selectOption({label:'Алекс'});await expect(page.locator('[data-result="hp"]')).toHaveText('22');
  await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
  const rulesReopened=JSON.parse(await readFile(path,'utf8'));assert.deepEqual(rulesReopened.ruleset,withRules.ruleset);assert.deepEqual(rulesReopened.characters[0].values,withRules.characters[0].values);
+ await page.getByText('Готовые примеры урона и защиты R Prison v1.1',{exact:true}).click();
+ await expect(page.locator('[data-example="Урон ближним оружием"]')).toHaveText('6');
+ await page.getByLabel('Урон ближним оружием: Сила',{exact:true}).fill('12');await expect(page.locator('[data-example="Урон ближним оружием"]')).toHaveText('7');
+ await page.evaluate(()=>{window.__confirmBackup=window.confirm;window.confirm=()=>true;});
+ await page.getByRole('button',{name:'Использовать R Prison — черновик',exact:true}).click();
+ await page.evaluate(()=>{window.confirm=window.__confirmBackup;delete window.__confirmBackup;});
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();
+ await expect(page.locator('.character-summary')).toContainText('HP (максимум): 22');await expect(page.locator('.character-summary')).toContainText('ОД (максимум): 8');
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+
  await writeFile(path, '{broken');
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
