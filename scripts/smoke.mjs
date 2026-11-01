@@ -112,7 +112,7 @@ try {
  await application.evaluate(({dialog}, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, path);
  await page.getByRole('button', {name:'Сохранить как…'}).click();
  await page.getByText('Все изменения сохранены', {exact:true}).waitFor();
- const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,7);
+ const saved = JSON.parse(await readFile(path,'utf8')); assert.equal(saved.name,'Побег из Лейквью'); assert.equal(saved.maps.length,2); assert.equal(saved.schemaVersion,8);
  assert.deepEqual(saved.maps[0].grid,{metersPerCell:1,locationKind:'custom',cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true});
  const savedCamera = saved.view.cameras[saved.view.activeMapId]; assert.ok(savedCamera.zoom > 0);
  await application.close(); console.log('Запуск Electron'); application = await launch(); page = await application.firstWindow();
@@ -320,6 +320,33 @@ try {
  await expect(page.locator('.character-summary')).toContainText('HP (максимум): 22');await expect(page.locator('.character-summary')).toContainText('ОД (максимум): 8');
  await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
 
+ console.log('Каталог предметов и независимые экземпляры');
+ await page.getByRole('tab',{name:'Предметы',exact:true}).click();
+ await page.getByLabel('Название предмета',{exact:true}).fill('Меч');await page.getByLabel('Категория предмета',{exact:true}).selectOption('weapon');await page.getByLabel('Кости урона',{exact:true}).fill('1d6');await page.getByLabel('Максимальная прочность',{exact:true}).fill('100');await page.getByLabel('Максимум зарядов',{exact:true}).fill('3');
+ await page.getByRole('button',{name:'Создать шаблон',exact:true}).click();await page.getByLabel('Кому выдать новый экземпляр',{exact:true}).selectOption({label:'Алекс'});
+ await page.getByRole('button',{name:'Выдать: Меч',exact:true}).click();await page.getByRole('button',{name:'Выдать: Меч',exact:true}).click();
+ await expect(page.locator('.item-instance')).toHaveCount(2);
+ const firstItem=page.locator('.item-instance').first();
+ await firstItem.getByLabel('Прочность экземпляра',{exact:true}).fill('20');await firstItem.getByLabel('Заряды экземпляра',{exact:true}).fill('1');await firstItem.getByRole('button',{name:'Сохранить состояние',exact:true}).click();
+ await expect(page.locator('.item-instance').nth(1).getByLabel('Прочность экземпляра',{exact:true})).toHaveValue('100');
+ await firstItem.getByLabel('Прочность экземпляра',{exact:true}).fill('101');await firstItem.getByRole('button',{name:'Сохранить состояние',exact:true}).click();await firstItem.getByRole('alert').waitFor();
+ await firstItem.getByLabel('Прочность экземпляра',{exact:true}).fill('20');await firstItem.getByRole('button',{name:'Сохранить состояние',exact:true}).click();
+ await firstItem.getByLabel('Экипирован',{exact:true}).check();await firstItem.getByLabel('Владелец экземпляра',{exact:true}).selectOption('');await expect(firstItem.getByLabel('Экипирован',{exact:true})).not.toBeChecked();
+ await page.getByRole('button',{name:'Редактировать: Меч',exact:true}).click();await page.getByLabel('Название предмета',{exact:true}).fill('Меч новый');await page.getByLabel('Максимальная прочность',{exact:true}).fill('200');await page.getByRole('button',{name:'Сохранить шаблон',exact:true}).click();
+ await page.getByRole('button',{name:'Выдать: Меч новый',exact:true}).click();await expect(page.locator('.item-instance')).toHaveCount(3);
+ await page.locator('.item-instance').nth(2).getByLabel('Экипирован',{exact:true}).check();
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();
+ const withItems=JSON.parse(await readFile(path,'utf8'));assert.equal(withItems.items[0].durability,20);assert.equal(withItems.items[1].durability,100);assert.equal(withItems.items[2].durability,200);assert.equal(withItems.items[0].ownerId,null);assert.equal(withItems.items[0].equipped,false);assert.equal(withItems.items[2].equipped,true);assert.equal(withItems.items[0].template.revision,1);assert.equal(withItems.items[2].template.revision,2);assert.equal(withItems.items[0].template.name,'Меч');
+ await application.close();application=await launch();page=await application.firstWindow();page.on('pageerror',error=>errors.push(error.message));
+ await application.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},path);
+ await page.getByRole('button',{name:'Открыть партию…',exact:true}).click();await page.getByRole('tab',{name:'Предметы',exact:true}).click();await expect(page.locator('.item-instance')).toHaveCount(3);
+ await expect(page.locator('.item-instance').first().getByLabel('Прочность экземпляра',{exact:true})).toHaveValue('20');await expect(page.locator('.item-instance').nth(2).getByLabel('Экипирован',{exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();const itemsReopened=JSON.parse(await readFile(path,'utf8'));assert.deepEqual(itemsReopened.items,withItems.items);assert.deepEqual(itemsReopened.itemTemplates,withItems.itemTemplates);
+ await page.evaluate(()=>{window.__confirmBackup=window.confirm;window.confirm=()=>true;});
+ await page.getByRole('button',{name:'Удалить шаблон: Меч новый',exact:true}).click();await expect(page.locator('.item-instance')).toHaveCount(3);await expect(page.locator('.item-templates article')).toHaveCount(0);
+ await page.getByRole('tab',{name:'Персонажи',exact:true}).click();await page.getByRole('button',{name:'Удалить: Алекс',exact:true}).click();
+ await page.evaluate(()=>{window.confirm=window.__confirmBackup;delete window.__confirmBackup;});
+ await page.getByRole('button',{name:'Сохранить как…',exact:true}).click();await page.getByText('Все изменения сохранены',{exact:true}).waitFor();const released=JSON.parse(await readFile(path,'utf8'));assert.equal(released.items.length,3);assert.ok(released.items.every(item=>item.ownerId===null&&!item.equipped));
  await writeFile(path, '{broken');
  await page.getByRole('button',{name:'Открыть партию…'}).click();
  await page.getByRole('status').filter({hasText:'Не удалось'}).waitFor();
@@ -337,5 +364,5 @@ try {
  await page.getByRole('tab',{name:'Карты',exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  await page.screenshot({path:join(temporary,'window.png')});
- console.log('PASS: правила, зависимости, расчёт 22, отказ цикла, сохранение персонажа и перезапуск;  пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
+ console.log('PASS: шаблоны, независимые ресурсы, передача, снимки версий, перезапуск и общий запас;  правила, зависимости, расчёт 22, отказ цикла, сохранение персонажа и перезапуск;  пять типов разметки, свойства, геометрия, видимость, карты и перезапуск;  каталог, портрет, два токена персонажа, привязка, коллизии, перезапуск и удаление токена;  пресеты, метры/клетку, сдвиг сетки без сдвига карты, калибровка отрезком;  калибровка/видимость сетки, независимые карты, восстановление v3;  PNG/JPG, две карты, переключение, зум/панорамирование, видимые пиксели карты, сохранение камеры и изображений;  Electron UI → создание → запись → перезапуск → открытие; повреждённый файл и отмена диалога не меняют партию.');
 } finally { if(application) application.process().kill('SIGKILL'); await rm(temporary,{recursive:true,force:true}); }

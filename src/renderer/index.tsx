@@ -4,6 +4,8 @@ import type { Campaign, CampaignAPI, Character } from '../shared/campaign.js';
 import './style.css';
 import { campaignSchema } from '../shared/campaign.js';
 import type { Annotation } from '../shared/annotations.js';
+import {Items} from './Items.js';
+import {transferItem} from '../domain/items.js';
 import { Rules } from './Rules.js';
 import { Characters } from './Characters.js';
 import { GridControls } from './board/GridControls.js';
@@ -11,7 +13,7 @@ import { Board } from './board/Board.js';
 import type { Camera, Grid } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
-  const [tab,setTab]=useState<'maps'|'characters'|'rules'>('maps');
+  const [tab,setTab]=useState<'maps'|'characters'|'rules'|'items'>('maps');
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [placementId,setPlacementId]=useState<string|null>(null);
   const [name, setName] = useState('');
@@ -41,7 +43,7 @@ function App() {
     if(!canReplace())return;
     setCampaign(null);setDirty(false);setPlacementId(null);setName('');setTab('maps');setMessage('Создайте партию или откройте сохранённый файл.');
   }
-  function chooseTab(next:'maps'|'characters'|'rules') {
+  function chooseTab(next:'maps'|'characters'|'rules'|'items') {
     setPlacementId(null);setTab(next);
   }
   const activeMap = campaign?.maps.find(m => m.id === campaign.view.activeMapId);
@@ -54,7 +56,7 @@ function App() {
   }
   function commit(next: Campaign, success?: string) {
     const parsed=campaignSchema.safeParse(next);
-    if(!parsed.success){setMessage('Изменение отклонено: проверьте свободные клетки и границы карты. Предел: 200 персонажей и 500 токенов.');return false;}
+    if(!parsed.success){setMessage(`Изменение отклонено: ${parsed.error.issues[0]?.message??'проверьте данные'}`);return false;}
     setCampaign(parsed.data);setDirty(true);if(success)setMessage(success);return true;
   }
   function updateGrid(grid: Grid) {
@@ -86,12 +88,13 @@ function App() {
     <div className="workspace-actions"><button className="secondary" disabled={busy} onClick={leaveParty}>К выбору партии</button><button className="secondary" disabled={busy} onClick={()=>void openParty()}>Открыть партию…</button>
 <button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></div></section>
     <nav className="workspace-tabs" role="tablist" aria-label="Разделы партии">
-    {([{id:'maps',name:'Карты'},{id:'characters',name:'Персонажи'},{id:'rules',name:'Правила'}] as const).map((item,index,list)=><button key={item.id} id={`tab-${item.id}`} role="tab" aria-selected={tab===item.id} aria-controls={`panel-${item.id}`} tabIndex={tab===item.id?0:-1} disabled={busy} onClick={()=>chooseTab(item.id)} onKeyDown={event=>{
+    {([{id:'maps',name:'Карты'},{id:'characters',name:'Персонажи'},{id:'rules',name:'Правила'},{id:'items',name:'Предметы'}] as const).map((item,index,list)=><button key={item.id} id={`tab-${item.id}`} role="tab" aria-selected={tab===item.id} aria-controls={`panel-${item.id}`} tabIndex={tab===item.id?0:-1} disabled={busy} onClick={()=>chooseTab(item.id)} onKeyDown={event=>{
       if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();const next=list[(index+(event.key==='ArrowRight'?1:list.length-1))%list.length].id;chooseTab(next);document.getElementById(`tab-${next}`)?.focus();}
     }}>{item.name}</button>)}
     </nav>
+    <div id="panel-items" role="tabpanel" aria-labelledby="tab-items" hidden={tab!=='items'} inert={busy}><Items key={campaign.id} campaign={campaign} onTemplates={itemTemplates=>commit({...campaign,itemTemplates},'Каталог обновлён.')} onItems={items=>commit({...campaign,items},'Инвентарь обновлён.')} /></div>
     <div id="panel-rules" role="tabpanel" aria-labelledby="tab-rules" hidden={tab!=='rules'} inert={busy}><Rules key={campaign.id} rules={campaign.ruleset} characters={campaign.characters} onRules={ruleset=>commit({...campaign,ruleset},'Правила обновлены.')} onValues={(id,values)=>commit({...campaign,characters:campaign.characters.map(character=>character.id===id?{...character,values}:character)},'Значения персонажа обновлены.')} /></div>
-    <div id="panel-characters" role="tabpanel" aria-labelledby="tab-characters" hidden={tab!=='characters'} inert={busy}><Characters key={campaign.id} campaign={campaign} onCreate={addCharacter} onDelete={id=>{commit({...campaign,characters:campaign.characters.filter(character=>character.id!==id),tokens:campaign.tokens.filter(token=>token.characterId!==id)});if(placementId===id)setPlacementId(null);}} onPlace={id=>{setTab('maps');setPlacementId(id);setMessage('Щёлкните свободную клетку на карте для размещения токена.');}} onValues={(id,values)=>commit({...campaign,characters:campaign.characters.map(character=>character.id===id?{...character,values}:character)},'Характеристики обновлены.')} onMessage={setMessage} /></div>
+    <div id="panel-characters" role="tabpanel" aria-labelledby="tab-characters" hidden={tab!=='characters'} inert={busy}><Characters key={campaign.id} campaign={campaign} onCreate={addCharacter} onDelete={id=>{commit({...campaign,characters:campaign.characters.filter(character=>character.id!==id),tokens:campaign.tokens.filter(token=>token.characterId!==id),items:campaign.items.map(item=>item.ownerId===id?transferItem(item,null):item)});if(placementId===id)setPlacementId(null);}} onPlace={id=>{setTab('maps');setPlacementId(id);setMessage('Щёлкните свободную клетку на карте для размещения токена.');}} onValues={(id,values)=>commit({...campaign,characters:campaign.characters.map(character=>character.id===id?{...character,values}:character)},'Характеристики обновлены.')} onMessage={setMessage} /></div>
     <section id="panel-maps" role="tabpanel" aria-labelledby="tab-maps" hidden={tab!=='maps'} className="maps" inert={busy}><div className="maps-header"><h2>Карты партии</h2><button disabled={busy || campaign.maps.length >= 20} onClick={() => void run(async () => {
       const result = await window.campaigns.importMap();
       if (!result.ok) { setMessage(result.error); return; }
@@ -105,7 +108,7 @@ function App() {
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
     </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /><Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section></>}
-    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 7 · Данные остаются на вашем компьютере</footer>
+    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 8а · Данные остаются на вашем компьютере</footer>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);

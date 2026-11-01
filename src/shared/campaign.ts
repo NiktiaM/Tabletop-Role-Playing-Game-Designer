@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {itemTemplateSchema,itemInstanceSchema} from './items.js';
 import {rPrisonDraft} from '../domain/presets/rprison.js';
 import {rulesetSchema,emptyRuleset,statKey} from './rules.js';
 import { annotationSchema } from './annotations.js';
@@ -41,11 +42,14 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(7), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(8), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   const ids = new Set(c.maps.map(m => m.id));
   const characters=new Map(c.characters.map(character=>[character.id,character]));
+  if(new Set(c.itemTemplates.map(item=>item.id)).size!==c.itemTemplates.length||new Set(c.items.map(item=>item.id)).size!==c.items.length)ctx.addIssue({code:'custom',message:'Повторяющиеся идентификаторы предметов'});
+  if(c.items.some(item=>item.ownerId!==null&&!characters.has(item.ownerId)))ctx.addIssue({code:'custom',message:'Владелец предмета не найден'});
+
   if(characters.size!==c.characters.length || new Set(c.tokens.map(token=>token.id)).size!==c.tokens.length) ctx.addIssue({code:'custom',message:'Повторяющиеся идентификаторы персонажей или токенов'});
   for(let i=0;i<c.tokens.length;i++) {
     const token=c.tokens[i], map=c.maps.find(map=>map.id===token.mapId), character=characters.get(token.characterId);
@@ -62,10 +66,10 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 7, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 8, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6)) {
-    return campaignSchema.parse({ ...input, schemaVersion: 7 });
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7)) {
+    return campaignSchema.parse({ ...input, schemaVersion: 8 });
   }
   return campaignSchema.parse(input);
 }
@@ -82,5 +86,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 7, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 8, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }
