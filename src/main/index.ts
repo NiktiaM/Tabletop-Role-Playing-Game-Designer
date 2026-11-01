@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { campaignSchema, mapSchema, createCampaign, type Result } from '../shared/campaign.js';
+import { campaignSchema, mapSchema, portraitSchema, createCampaign, type Result } from '../shared/campaign.js';
 import { readCampaign, writeCampaign } from './storage.js';
 const here = dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow;
@@ -17,9 +17,29 @@ function validateImages(campaign: import('../shared/campaign.js').Campaign) {
     const size = image.getSize();
     if (image.isEmpty() || size.width !== map.width || size.height !== map.height) throw new Error('Повреждённое изображение карты');
   }
+  for (const character of campaign.characters) {
+    if(character.portrait) {
+      const image=nativeImage.createFromDataURL(character.portrait), size=image.getSize();
+      if(image.isEmpty()||size.width>512||size.height>512) throw new Error('Некорректный портрет');
+    }
+  }
   return campaign;
 }
 app.whenReady().then(() => {
+  ipcMain.handle('campaign:import-portrait',event=>result(async()=>{
+    if(event.senderFrame!==window.webContents.mainFrame) throw new Error('Недопустимый запрос');
+    const selected=await dialog.showOpenDialog(window,{title:'Портрет персонажа',properties:['openFile'],filters:[{name:'PNG/JPG',extensions:['png','jpg','jpeg']}]});
+    if(selected.canceled||!selected.filePaths[0]) return null;
+    const path=selected.filePaths[0];
+    if((await stat(path)).size>15*1024*1024) throw new Error('Портрет превышает 15 МБ');
+    const bytes=await readFile(path);
+    const png=bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+    if(!png && !(bytes[0]===255&&bytes[1]===216&&bytes[2]===255)) throw new Error('Ожидался PNG/JPG');
+    const image=nativeImage.createFromBuffer(bytes), size=image.getSize();
+    if(image.isEmpty()||size.width*size.height>32_000_000||size.width>8192||size.height>8192) throw new Error('Неподдерживаемый портрет');
+    const scale=Math.min(1,512/Math.max(size.width,size.height));
+    return portraitSchema.parse(image.resize({width:Math.max(1,Math.round(size.width*scale)),height:Math.max(1,Math.round(size.height*scale))}).toDataURL());
+  }));
   ipcMain.handle('campaign:import-map', event => result(async () => {
     if (event.senderFrame !== window.webContents.mainFrame) throw new Error('Недопустимый запрос');
     const selected = await dialog.showOpenDialog(window, { title: 'Добавить карту', properties: ['openFile'], filters: [{ name: 'Карты PNG/JPG', extensions: ['png', 'jpg', 'jpeg'] }] });

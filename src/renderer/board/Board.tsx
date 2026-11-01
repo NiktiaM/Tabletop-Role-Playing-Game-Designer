@@ -2,10 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 // Official CSP interpreter replaces dynamic code generation with ordinary functions.
 import 'pixi.js/unsafe-eval';
 import { Application, Sprite, Texture, Graphics } from 'pixi.js';
-import type { Camera, GameMap, Grid } from '../../shared/campaign.js';
-import { gridSegments, imageToScreen, moveGrid, screenToImage, calibrateGrid, type Point } from '../../domain/grid.js';
+import type { Camera, GameMap, Grid, Character, Token } from '../../shared/campaign.js';
+import { gridSegments, imageToScreen, moveGrid, screenToImage, calibrateGrid, imageToCell, type Point } from '../../domain/grid.js';
+import { Tokens } from './Tokens.js';
 import { fitCamera, zoomAt } from './camera.js';
-export function Board({ map, camera, onCamera, onGrid }: { map: GameMap; camera?: Camera; onCamera: (camera: Camera) => void; onGrid: (grid: Grid) => void }) {
+export function Board({ map, camera, onCamera, onGrid, tokens, characters, placementCharacter, onPlace, onCancelPlace, onMoveToken, onRemoveToken }: {
+ map:GameMap;camera?:Camera;onCamera:(camera:Camera)=>void;onGrid:(grid:Grid)=>void;
+ tokens:Token[];characters:Character[];placementCharacter:Character|null;onPlace:(column:number,row:number)=>void;onCancelPlace:()=>void;
+ onMoveToken:(id:string,column:number,row:number)=>void;onRemoveToken:(id:string)=>void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const sprite = useRef<Sprite | null>(null);
   const overlay = useRef<Graphics | null>(null);
@@ -22,6 +27,7 @@ export function Board({ map, camera, onCamera, onGrid }: { map: GameMap; camera?
   const [moveMode, setMoveMode] = useState(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  useEffect(()=>{if(placementCharacter){setCalibrationMode(false);setMoveMode(false);setPoints([]);drag.current=null;}},[placementCharacter?.id]);
   useEffect(() => {
     const element = host.current!;
     const app = new Application();
@@ -70,8 +76,9 @@ export function Board({ map, camera, onCamera, onGrid }: { map: GameMap; camera?
   }, [map.id, map.image, map.width, map.height]);
   useEffect(() => { if (sprite.current && camera) { sprite.current.position.set(camera.x, camera.y); sprite.current.scale.set(camera.zoom); } redraw.current(); }, [camera, map.grid]);
   return <div className="board-section">
+    {placementCharacter && <p className="placement-status" role="status">Размещение: {placementCharacter.name} ({placementCharacter.footprint.width}×{placementCharacter.footprint.height}). Щёлкните верхнюю левую клетку занимаемой области. <button onClick={onCancelPlace}>Отменить размещение</button></p>}
     <div className="calibration-tools">
-      <button type="button" onClick={() => {setCalibrationMode(!calibrationMode);setMoveMode(false);setPoints([]);setCalibrationError('');drag.current=null;}}>{calibrationMode?'Отменить выбор отрезка':'Калибровать по отрезку'}</button>
+      <button type="button" onClick={() => {onCancelPlace();setCalibrationMode(!calibrationMode);setMoveMode(false);setPoints([]);setCalibrationError('');drag.current=null;}}>{calibrationMode?'Отменить выбор отрезка':'Калибровать по отрезку'}</button>
       {calibrationMode && <>
         <p className="hint">Щёлкните начало и конец отрезка на карте. Укажите известную длину в метрах; масштаб клетки берётся из поля «Метров на клетку». Первую точку используем как начало сетки; её оси остаются горизонтальными и вертикальными. Выбрано точек: {points.length}/2.</p>
         <label>Длина отрезка, м<input type="number" min="0.01" max="2048" step="any" value={cells} onChange={event => setCells(event.target.value)} /></label>
@@ -83,10 +90,15 @@ export function Board({ map, camera, onCamera, onGrid }: { map: GameMap; camera?
         {calibrationError && <p role="alert">{calibrationError}</p>}
       </>}
     </div>
-    <label className="grid-toggle"><input type="checkbox" checked={moveMode} onChange={event => { drag.current = null; setMoveMode(event.target.checked); setCalibrationMode(false);setPoints([]); if(event.target.checked && !map.grid.visible) onGrid({...map.grid,visible:true}); }} />Перемещать сетку</label>
+    <label className="grid-toggle"><input type="checkbox" checked={moveMode} onChange={event => { onCancelPlace();drag.current = null; setMoveMode(event.target.checked); setCalibrationMode(false);setPoints([]); if(event.target.checked && !map.grid.visible) onGrid({...map.grid,visible:true}); }} />Перемещать сетку</label>
     <div className="board-tools"><span>{map.width} × {map.height} · {Math.round((camera?.zoom ?? 1) * 100)}%</span><button disabled={!ready} onClick={() => { const e = host.current!; onCamera(fitCamera(map.width, map.height, e.clientWidth, e.clientHeight)); }}>Вписать карту</button></div>
     {map.grid.visible && map.grid.cellSizePx * (camera?.zoom ?? 1) < 6 && <p className="hint">Сетка слишком мелкая для отображения. Приблизьте карту — калибровка сохранена.</p>}
-    <div className={`board${calibrationMode ? ' calibrate-grid' : moveMode ? ' move-grid' : ''}`}  ref={host} aria-label="Поле карты" onPointerDown={e => { if (e.button !== 0 || !ready) return;
+    <div className={`board${calibrationMode || placementCharacter ? ' calibrate-grid' : moveMode ? ' move-grid' : ''}`}  ref={host} aria-label="Поле карты" onPointerDown={e => { if (e.button !== 0 || !ready) return;
+      if(placementCharacter && current.current){
+        const bounds=e.currentTarget.getBoundingClientRect();
+        const point=screenToImage({x:e.clientX-bounds.left-e.currentTarget.clientLeft,y:e.clientY-bounds.top-e.currentTarget.clientTop},current.current);
+        const cell=imageToCell(point,map.grid);onPlace(cell.column,cell.row);return;
+      }
       if (calibrationMode && current.current) {
         const bounds=e.currentTarget.getBoundingClientRect();
         const point=screenToImage({x:e.clientX-bounds.left-e.currentTarget.clientLeft,y:e.clientY-bounds.top-e.currentTarget.clientTop},current.current);
@@ -98,7 +110,8 @@ export function Board({ map, camera, onCamera, onGrid }: { map: GameMap; camera?
         grid.current = next; onGrid(next);
       } else onCamera({ ...current.current, x: current.current.x + e.clientX - before.x, y: current.current.y + e.clientY - before.y }); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
       {error && <p role="alert" className="board-message">{error}</p>}{!ready && !error && <p className="board-message">Загрузка карты…</p>}
+      {camera && <Tokens tokens={tokens} characters={characters} map={map} camera={camera} disabled={!ready||moveMode||calibrationMode||!!placementCharacter} onMove={onMoveToken} onRemove={onRemoveToken} />}
       {calibrationMode && points.map((point,index) => { const screen=imageToScreen(point,camera??{x:0,y:0,zoom:1});return <span className="calibration-point" key={index} style={{left:screen.x,top:screen.y}}>{index+1}</span>; })}
-    </div><p className="hint">Колесо мыши — масштаб · {calibrationMode ? 'Выберите две точки на изображении' : moveMode ? 'Перетаскивание левой кнопкой — сдвиг сетки; карта остаётся на месте' : 'Перетаскивание левой кнопкой — перемещение карты'}</p>
+    </div><div className="token-list">{tokens.filter(token=>token.mapId===map.id).map(token=><button key={token.id} className="secondary" onClick={()=>onRemoveToken(token.id)}>Убрать токен: {characters.find(character=>character.id===token.characterId)?.name}</button>)}</div><p className="hint">Токен: перетаскивание — привязка к клетке; стрелки — шаг; Delete — убрать с карты. Пунктир показывает занимаемую область. Это ручное размещение без расчёта пути и ОД.</p><p className="hint">Колесо мыши — масштаб · {calibrationMode ? 'Выберите две точки на изображении' : moveMode ? 'Перетаскивание левой кнопкой — сдвиг сетки; карта остаётся на месте' : 'Перетаскивание левой кнопкой — перемещение карты'}</p>
   </div>;
 }
