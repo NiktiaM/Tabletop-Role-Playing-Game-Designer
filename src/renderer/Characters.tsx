@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import {movementBudget} from '../domain/movement-action.js';
 import {evaluateStats} from '../domain/rules/evaluate.js';
 import {CharacterValues} from './CharacterValues.js';
 import { characterSchema, type Campaign, type Character } from '../shared/campaign.js';
@@ -45,5 +46,5 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
 }
 
 function CharacterSummary({character,campaign}:{character:Character;campaign:Campaign}) {
- try {const rows=evaluateStats(campaign.ruleset,character.values);return <div className="character-summary">{rows.map(row=><span key={row.key} title={row.explanation}><strong>{row.name}</strong>: {row.value}</span>)}{!rows.length&&<span>Характеристики не заданы — выберите готовые правила.</span>}</div>;}catch(error){return <p role="alert">{error instanceof Error?error.message:'Ошибка расчёта'}</p>;}
+ try {const rows=evaluateStats(campaign.ruleset,character.values);let remaining:string|null=null;if(campaign.ruleset.movement.budgetStat)try{const budget=movementBudget(campaign,character);remaining=`${Number(budget.remaining.toFixed(3))} / ${budget.maximum}`;}catch{remaining='Проверьте настройку бюджета';}return <div className="character-summary">{remaining&&<span><strong>Остаток бюджета</strong>: {remaining}</span>}{rows.map(row=><span key={row.key} title={row.explanation}><strong>{row.name}</strong>: {row.value}</span>)}{!rows.length&&<span>Характеристики не заданы — выберите готовые правила.</span>}</div>;}catch(error){return <p role="alert">{error instanceof Error?error.message:'Ошибка расчёта'}</p>;}
 }

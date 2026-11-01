@@ -6,7 +6,7 @@ import {createItem} from '../src/domain/items.js';
 import {characterBundleSchema} from '../src/shared/transfer.js';
 function source(){
  const c=createCampaign('Источник'),id=crypto.randomUUID();
- c.characters.push({id,name:'Герой',kind:'character',footprint:{width:2,height:1},portrait:null,values:{strength:8}});
+ c.characters.push({id,resources:{},name:'Герой',kind:'character',footprint:{width:2,height:1},portrait:null,values:{strength:8}});
  const definition={id:crypto.randomUUID(),revision:1,name:'Рывок',description:'Проверка',costText:'2 ОД (вручную)',maxUses:2};
  c.abilityTemplates.push(definition);c.abilities.push({id:crypto.randomUUID(),ownerId:id,definition:structuredClone(definition),usesRemaining:1});
  c.items.push({...createItem({id:crypto.randomUUID(),revision:1,name:'Меч',category:'weapon',description:'',damageDice:'1d6',maxDurability:100,maxCharges:0,image:null},id),durability:20,equipped:true});return c;

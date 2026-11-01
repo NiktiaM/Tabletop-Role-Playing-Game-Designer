@@ -35,6 +35,6 @@ test('правила и исходные значения восстанавли
  const next={...c,ruleset:rules,characters:[{id,name:'Герой',kind:'character',footprint:{width:1,height:1},portrait:null,values:{body:10}}]};
  const reopened=parseCampaign(JSON.parse(JSON.stringify(next)));expect(reopened.ruleset).toEqual(rules);expect(reopened.characters[0].values).toEqual({body:10});
  expect(evaluateStats(reopened.ruleset,reopened.characters[0].values).find(row=>row.key==='hp')?.value).toBe(22);
- const {ruleset,...old}=c;const migrated=parseCampaign({...old,schemaVersion:6});expect(migrated.ruleset.stats).toEqual([]);expect(migrated.schemaVersion).toBe(10);
+ const {ruleset,...old}=c;const migrated=parseCampaign({...old,schemaVersion:6});expect(migrated.ruleset.stats).toEqual([]);expect(migrated.schemaVersion).toBe(11);
  const other=createCampaign('Другая');expect(other.ruleset.id).not.toBe(c.ruleset.id);expect(other.ruleset.stats.some(stat=>stat.key==='hp_max')).toBe(true);
 });

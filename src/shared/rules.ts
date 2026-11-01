@@ -19,8 +19,11 @@ export function compileStats(stats:StatDefinition[]):Map<string,Expr>{
  function visit(key:string){if(active.has(key))throw new Error(`Циклическая зависимость: ${key}`);if(visited.has(key))return;active.add(key);const ast=formulas.get(key);if(ast)for(const ref of references(ast))visit(ref);active.delete(key);visited.add(key);}
  for(const key of keys)visit(key);return formulas;
 }
-export const rulesetSchema=z.object({id:z.uuid(),name:z.string().trim().min(1).max(120),revision:z.number().int().min(1).max(1000000),engineVersion:z.literal(1),stats:z.array(statSchema).max(64)}).strict().superRefine((rules,ctx)=>{
+export const defaultMovement=()=>({budgetStat:null as string|null,mode:'meters' as 'meters'|'cells',diagonal:true});
+export const movementSchema=z.object({budgetStat:statKey.nullable(),mode:z.enum(['meters','cells']),diagonal:z.boolean()}).strict();
+export const rulesetSchema=z.object({id:z.uuid(),name:z.string().trim().min(1).max(120),revision:z.number().int().min(1).max(1000000),engineVersion:z.literal(1),movement:movementSchema.default(defaultMovement),stats:z.array(statSchema).max(64)}).strict().superRefine((rules,ctx)=>{
+ if(rules.movement.budgetStat&&!rules.stats.some(stat=>stat.key===rules.movement.budgetStat))ctx.addIssue({code:'custom',message:'Источник бюджета движения не найден среди показателей'});
  try{compileStats(rules.stats);}catch(error){ctx.addIssue({code:'custom',message:error instanceof Error?error.message:'Неверные правила'});}
 });
 export type Ruleset=z.infer<typeof rulesetSchema>;
-export const emptyRuleset=():Ruleset=>({id:crypto.randomUUID(),name:'Правила партии',revision:1,engineVersion:1,stats:[]});
+export const emptyRuleset=():Ruleset=>({id:crypto.randomUUID(),name:'Правила партии',revision:1,engineVersion:1,movement:defaultMovement(),stats:[]});

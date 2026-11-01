@@ -4,6 +4,7 @@ import type { Campaign, CampaignAPI, Character } from '../shared/campaign.js';
 import './style.css';
 import { campaignSchema } from '../shared/campaign.js';
 import type { Annotation } from '../shared/annotations.js';
+import {moveWithPath,movementBudget} from '../domain/movement-action.js';
 import {Abilities} from './Abilities.js';
 import {CharacterTransfer} from './CharacterTransfer.js';
 import {Inventory} from './Inventory.js';
@@ -18,6 +19,7 @@ import type { Camera, Grid } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
   const [tab,setTab]=useState<'maps'|'characters'|'rules'|'items'|'inventory'|'abilities'>('maps');
+  const [setupMode,setSetupMode]=useState(false),[undoMove,setUndoMove]=useState<Campaign|null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [placementId,setPlacementId]=useState<string|null>(null);
   const [name, setName] = useState('');
@@ -40,12 +42,12 @@ function App() {
     await run(async()=>{
       const result=await window.campaigns.open();
       if(!result.ok){setMessage(result.error);return;}
-      if(result.value){setCampaign(result.value.campaign);setDirty(false);setPlacementId(null);setTab('maps');setMessage(`Открыто: ${result.value.fileName}`);}
+      if(result.value){setCampaign(result.value.campaign);setUndoMove(null);setSetupMode(false);setDirty(false);setPlacementId(null);setTab('maps');setMessage(`Открыто: ${result.value.fileName}`);}
     });
   }
   function leaveParty() {
     if(!canReplace())return;
-    setCampaign(null);setDirty(false);setPlacementId(null);setName('');setTab('maps');setMessage('Создайте партию или откройте сохранённый файл.');
+    setCampaign(null);setUndoMove(null);setSetupMode(false);setDirty(false);setPlacementId(null);setName('');setTab('maps');setMessage('Создайте партию или откройте сохранённый файл.');
   }
   function chooseTab(next:'maps'|'characters'|'rules'|'items'|'inventory'|'abilities') {
     setPlacementId(null);setTab(next);
@@ -61,7 +63,7 @@ function App() {
   function commit(next: Campaign, success?: string) {
     const parsed=campaignSchema.safeParse(next);
     if(!parsed.success){setMessage(`Изменение отклонено: ${parsed.error.issues[0]?.message??'проверьте данные'}`);return false;}
-    setCampaign(parsed.data);setDirty(true);if(success)setMessage(success);return true;
+    setCampaign(parsed.data);setUndoMove(null);setDirty(true);if(success)setMessage(success);return true;
   }
   function updateGrid(grid: Grid) {
     if(campaign)commit({...campaign,maps:campaign.maps.map(map=>map.id===activeMap?.id?{...map,grid}:map)});
@@ -73,7 +75,10 @@ function App() {
     if(campaign)commit({...campaign,characters:[...campaign.characters,character]},`Создан персонаж: ${character.name}`);
   }
   function moveToken(id:string,column:number,row:number) {
-    if(campaign)commit({...campaign,tokens:campaign.tokens.map(token=>token.id===id?{...token,column,row}:token)},'Токен перемещён.');
+    if(!campaign)return;if(setupMode){commit({...campaign,tokens:campaign.tokens.map(token=>token.id===id?{...token,column,row}:token)},'Расстановка мастера: без пути и расхода ОД.');return;}try{const moved=moveWithPath(campaign,id,column,row);if(moved.cost&&commit(moved.campaign,`Движение: ${Number(moved.cost.toFixed(3))} ОД.`))setUndoMove(campaign);}catch(error){setMessage(error instanceof Error?error.message:'Движение отклонено');}
+  }
+  function setBudget(id:string,value:number|null){
+    if(!campaign)return;try{const character=campaign.characters.find(character=>character.id===id);if(!character)return;const budget=movementBudget(campaign,character);if(value!==null&&(!Number.isFinite(value)||value<0||value>budget.maximum))throw new Error('Остаток должен быть от нуля до максимума');const resources={...character.resources};if(value===null)delete resources[budget.key];else resources[budget.key]=value;commit({...campaign,characters:campaign.characters.map(existing=>existing.id===id?{...existing,resources}:existing)},'Остаток ОД обновлён.');}catch(error){setMessage(error instanceof Error?error.message:'Ошибка бюджета');}
   }
   function removeToken(id:string) {if(campaign)commit({...campaign,tokens:campaign.tokens.filter(token=>token.id!==id)},'Токен убран с карты. Персонаж сохранён.');}
   const placementCharacter=campaign?.characters.find(character=>character.id===placementId)??null;
@@ -112,9 +117,9 @@ function App() {
     <p className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /><Board key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={activeMap.id}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /><Board active={tab==='maps'} setupMode={setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section></>}
-    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 8в · Данные остаются на вашем компьютере</footer>
+    <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Итерация 9 · Данные остаются на вашем компьютере</footer>
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<App />);

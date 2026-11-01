@@ -11,7 +11,7 @@ test('партия восстанавливается и безопасно за
  await writeCampaign(path, { ...c, name: 'Вторая история' }); expect((await readCampaign(path)).name).toBe('Вторая история');
  const before = await readFile(path, 'utf8'); await expect(writeCampaign(path, {...c, schemaVersion: 99})).rejects.toThrow(); expect(await readFile(path,'utf8')).toBe(before);
  await writeFile(path, '{broken'); await expect(readCampaign(path)).rejects.toThrow();
- await writeFile(path, JSON.stringify({...c, schemaVersion: 11})); await expect(readCampaign(path)).rejects.toThrow();
+ await writeFile(path, JSON.stringify({...c, schemaVersion: 12})); await expect(readCampaign(path)).rejects.toThrow();
  } finally { await rm(dir,{recursive:true,force:true}); }
 });
 test('пустые и слишком длинные названия отклоняются', () => { expect(() => createCampaign('   ')).toThrow(); expect(() => createCampaign('а'.repeat(121))).toThrow(); });
@@ -37,7 +37,7 @@ test('v2 открывается без изменения файла, v3 сох�
   const map={id,name:'Карта',width:1,height:1,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='};
   const old=JSON.stringify({...c,schemaVersion:2,maps:[map],view:{activeMapId:id,cameras:{[id]:{x:10,y:20,zoom:0.5}}}});
   await writeFile(path,old); const migrated=await readCampaign(path);
-  expect(await readFile(path,'utf8')).toBe(old); expect(migrated.schemaVersion).toBe(10);
+  expect(await readFile(path,'utf8')).toBe(old); expect(migrated.schemaVersion).toBe(11);
   expect(migrated.maps[0].grid).toEqual({metersPerCell:1,locationKind:'custom',cellSizePx:64,originPx:{x:0,y:0},visible:false});
   const secondId=crypto.randomUUID();
   const current={...migrated,maps:[{...migrated.maps[0],grid:{metersPerCell:1,locationKind:'custom' as const,cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true}},{...migrated.maps[0],id:secondId}]};
@@ -67,7 +67,7 @@ test('v4 получает пустой каталог; v5 сохраняет п�
  expect(migrated.characters).toEqual([]);expect(migrated.tokens).toEqual([]);
  const mapId=crypto.randomUUID(),id=crypto.randomUUID();
  const portrait='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
- const current={...migrated,maps:[{annotations:[],id:mapId,name:'Карта',width:500,height:500,image:portrait,grid:{cellSizePx:50,originPx:{x:0,y:0},visible:true,metersPerCell:1,locationKind:'custom'}}],characters:[{values:{},id,name:'NPC',kind:'npc',footprint:{width:1,height:2},portrait}],tokens:[{id:crypto.randomUUID(),mapId,characterId:id,column:1,row:1},{id:crypto.randomUUID(),mapId,characterId:id,column:3,row:1}]};
+ const current={...migrated,maps:[{annotations:[],id:mapId,name:'Карта',width:500,height:500,image:portrait,grid:{cellSizePx:50,originPx:{x:0,y:0},visible:true,metersPerCell:1,locationKind:'custom'}}],characters:[{resources:{},values:{},id,name:'NPC',kind:'npc',footprint:{width:1,height:2},portrait}],tokens:[{id:crypto.randomUUID(),mapId,characterId:id,column:1,row:1},{id:crypto.randomUUID(),mapId,characterId:id,column:3,row:1}]};
  await writeCampaign(path,current);expect(await readCampaign(path)).toEqual(current);
  const before=await readFile(path,'utf8');await expect(writeCampaign(path,{...current,characters:[]})).rejects.toThrow();expect(await readFile(path,'utf8')).toBe(before);
  } finally {await rm(dir,{recursive:true,force:true});}

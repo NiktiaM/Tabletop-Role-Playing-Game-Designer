@@ -30,6 +30,7 @@ export function Rules({rules,characters,onRules,onValues}:{rules:Ruleset;charact
  <RuleExamples/>
  <p className="hint">Применённая версия: {rules.revision}. Правила хранятся внутри этой партии. Редактирование здесь не меняет другие партии. Сначала настройте и примените показатели, затем проверьте расчёт ниже.</p>
  <label>Название правил<input maxLength={120} value={draft.name} onChange={event=>{setDraft({...draft,name:event.target.value});setNotice('');}}/></label>
+ <div className="movement-rule-fields"><label>Показатель бюджета движения<select aria-label="Показатель бюджета движения" value={draft.movement.budgetStat??''} onChange={event=>setDraft({...draft,movement:{...draft.movement,budgetStat:event.target.value||null}})}><option value="">Не настроен</option>{draft.stats.map(stat=><option key={stat.key} value={stat.key}>{stat.name} ({stat.key})</option>)}</select></label><p className="hint">По согласованию: 1 ОД за метр, диагональ ×√2. В готовом R Prison используется максимум ОД. Для старой партии выберите источник бюджета и примените правила. Сброс текущего остатка — вручную на карте.</p></div>
  <div className="rule-list">{draft.stats.map((stat,index)=><article key={index}>
  <h3>{index+1}. {stat.kind==='base'?'Исходный показатель':'Вычисляемый показатель'}</h3>
  <div className="grid-fields"><label>Ключ показателя {index+1}<input value={stat.key} maxLength={32} onChange={event=>update(index,{key:event.target.value})}/></label>
