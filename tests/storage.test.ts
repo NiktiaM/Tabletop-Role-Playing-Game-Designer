@@ -11,7 +11,7 @@ test('партия восстанавливается и безопасно за
  await writeCampaign(path, { ...c, name: 'Вторая история' }); expect((await readCampaign(path)).name).toBe('Вторая история');
  const before = await readFile(path, 'utf8'); await expect(writeCampaign(path, {...c, schemaVersion: 99})).rejects.toThrow(); expect(await readFile(path,'utf8')).toBe(before);
  await writeFile(path, '{broken'); await expect(readCampaign(path)).rejects.toThrow();
- await writeFile(path, JSON.stringify({...c, schemaVersion: 13})); await expect(readCampaign(path)).rejects.toThrow();
+ await writeFile(path, JSON.stringify({...c, schemaVersion: 14})); await expect(readCampaign(path)).rejects.toThrow();
  } finally { await rm(dir,{recursive:true,force:true}); }
 });
 test('пустые и слишком длинные названия отклоняются', () => { expect(() => createCampaign('   ')).toThrow(); expect(() => createCampaign('а'.repeat(121))).toThrow(); });
@@ -37,7 +37,7 @@ test('v2 открывается без изменения файла, v3 сох�
   const map={id,name:'Карта',width:1,height:1,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='};
   const old=JSON.stringify({...c,schemaVersion:2,maps:[map],view:{activeMapId:id,cameras:{[id]:{x:10,y:20,zoom:0.5}}}});
   await writeFile(path,old); const migrated=await readCampaign(path);
-  expect(await readFile(path,'utf8')).toBe(old); expect(migrated.schemaVersion).toBe(12);
+  expect(await readFile(path,'utf8')).toBe(old); expect(migrated.schemaVersion).toBe(13);
   expect(migrated.maps[0].grid).toEqual({metersPerCell:1,locationKind:'custom',cellSizePx:64,originPx:{x:0,y:0},visible:false});
   const secondId=crypto.randomUUID();
   const current={...migrated,maps:[{...migrated.maps[0],grid:{metersPerCell:1,locationKind:'custom' as const,cellSizePx:80.5,originPx:{x:17.25,y:-23.5},visible:true}},{...migrated.maps[0],id:secondId}]};

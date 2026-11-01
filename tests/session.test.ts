@@ -31,7 +31,7 @@ test('свободная игра проверяет стены и путь да
  expect(()=>moveWithPath({...source,maps:[{...map,annotations:[wall]}]},token.id,2,2,false)).toThrow('Нет допустимого пути');
 });
 
-test('v11 открывается в подготовке без сброса данных, v12 сохраняет режим игры',()=>{
+test('v11 открывается в подготовке без сброса данных, актуальный формат сохраняет режим игры',()=>{
  const {session,...old}=fixture(),migrated=parseCampaign({...old,schemaVersion:11});
  expect(migrated.session).toEqual({started:false,tacticalMovement:false});
  expect(migrated.characters).toEqual(old.characters);expect(migrated.tokens).toEqual(old.tokens);

@@ -16,3 +16,7 @@
 .movement-overlay{position:absolute;inset:0;z-index:1;pointer-events:none}.movement-controls{background:#172b27;border:1px solid #42695e;border-radius:10px;padding:16px;margin:16px 0}.movement-controls input{max-width:180px}.movement-controls button{margin:4px}
 .movement-controls{height:360px;overflow:auto}.movement-controls .grid-toggle input{max-width:none}.movement-controls>p{margin:10px 0}
 [hidden]{display:none!important}.session-bar{margin:18px 0;padding:16px;background:#1e3048;border:1px solid #536b8c;border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;gap:14px}.session-bar .grid-toggle{margin:0}.session-bar span{font-size:13px;color:#b6c2d6}.session-bar input{max-width:none}
+
+.ground-items{margin:16px 0;padding:16px;background:#151b25;border:1px solid #53617a;border-radius:8px}.ground-items select{max-width:100%}.ground-items .inventory-cards{margin-top:12px}.ground-marker{position:absolute;z-index:4;transform:translate(-50%,-50%);padding:0;min-width:0;border:2px solid #e7b453;border-radius:6px;background:#49381e;color:white;display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none;overflow:hidden}.ground-marker img{width:100%;height:100%;object-fit:cover;pointer-events:none}.ground-marker:disabled{pointer-events:none;opacity:1}
+
+.ground-items .inventory-cards{max-height:320px;overflow:auto}

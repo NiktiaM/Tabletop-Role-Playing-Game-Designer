@@ -8,7 +8,7 @@ export function Inventory({campaign,onItems}:{campaign:Campaign;onItems:(items:I
  const [selected,setSelected]=useState(''),[search,setSearch]=useState(''),[source,setSource]=useState('templates'),[message,setMessage]=useState('');
  useEffect(()=>{if(selected&&!campaign.characters.some(character=>character.id===selected))setSelected('');},[campaign.characters,selected]);
  const character=campaign.characters.find(character=>character.id===selected),owner=selected||null;
- const owned=campaign.items.filter(item=>item.ownerId===owner);
+ const owned=campaign.items.filter(item=>!item.ground&&item.ownerId===owner);
  function give(payload:unknown){try{if(onItems(giveInventory(campaign,payload,owner)))setMessage('Предмет добавлен в выбранный инвентарь. Сохраните партию.');}catch(error){setMessage(error instanceof Error?error.message:'Не удалось перенести предмет');}}
  function drag(event:React.DragEvent,kind:'template'|'instance',id:string){event.dataTransfer.setData(mime,JSON.stringify({kind,id}));event.dataTransfer.effectAllowed=kind==='template'?'copy':'move';}
  const query=search.trim().toLocaleLowerCase('ru');
@@ -27,7 +27,7 @@ export function Inventory({campaign,onItems}:{campaign:Campaign;onItems:(items:I
  <p className="hint">Перетаскивание шаблона создаёт новую вещь. Перетаскивание существующей вещи меняет владельца, сохраняя прочность и заряды; отметка экипировки снимается. Экипировка и изменение ресурсов доступны во вкладке «Предметы».</p>
  <div className="inventory-cards" data-testid="inventory-source">{source==='templates'?campaign.itemTemplates.filter(item=>found(item.name,item.description)).map(template=><article key={template.id} draggable onDragStart={event=>drag(event,'template',template.id)} data-source-template={template.id}>
  {template.image&&<img className="item-photo" src={template.image} alt={template.name}/>}<strong>{template.name}</strong><span>{categoryNames[template.category]} · шаблон v{template.revision}</span><button onClick={()=>give({kind:'template',id:template.id})}>Добавить в инвентарь: {template.name}</button>
- </article>):campaign.items.filter(item=>item.ownerId!==owner&&(source!=='stash'||item.ownerId===null)&&found(item.template.name,item.template.description)).map(item=><article key={item.id} draggable onDragStart={event=>drag(event,'instance',item.id)} data-source-instance={item.id}>
+ </article>):campaign.items.filter(item=>!item.ground&&item.ownerId!==owner&&(source!=='stash'||item.ownerId===null)&&found(item.template.name,item.template.description)).map(item=><article key={item.id} draggable onDragStart={event=>drag(event,'instance',item.id)} data-source-instance={item.id}>
  {item.template.image&&<img className="item-photo" src={item.template.image} alt={item.template.name}/>}<strong>{item.template.name}</strong><span>{campaign.characters.find(character=>character.id===item.ownerId)?.name??'Общий запас'} · прочность {item.durability}/{item.template.maxDurability}</span><button onClick={()=>give({kind:'instance',id:item.id})}>Добавить в инвентарь: {item.template.name}</button>
  </article>)}</div>
  </section>;

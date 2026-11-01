@@ -4,6 +4,7 @@ import type { Campaign, CampaignAPI, Character } from '../shared/campaign.js';
 import './style.css';
 import { campaignSchema } from '../shared/campaign.js';
 import type { Annotation } from '../shared/annotations.js';
+import {placeItem,takeItem} from '../domain/ground-items.js';
 import {startGame,setTacticalMovement} from '../domain/session.js';
 import {moveWithPath,movementBudget} from '../domain/movement-action.js';
 import {Abilities} from './Abilities.js';
@@ -69,6 +70,12 @@ function App() {
     if(!parsed.success){setMessage(`Изменение отклонено: ${parsed.error.issues[0]?.message??'проверьте данные'}`);return false;}
     setCampaign(parsed.data);setUndoMove(null);setDirty(true);if(success)setMessage(success);return true;
   }
+  function moveGroundItem(id:string,column:number,row:number){
+    if(!campaign||!activeMap)return false;try{return commit(placeItem(campaign,id,activeMap.id,column,row),'Предмет размещён на поле.');}catch(error){setMessage(error instanceof Error?error.message:'Не удалось разместить предмет');return false;}
+  }
+  function takeGroundItem(id:string,ownerId:string|null){
+    if(!campaign)return;try{commit(takeItem(campaign,id,ownerId),'Предмет передан с поля без изменения ресурсов.');}catch(error){setMessage(error instanceof Error?error.message:'Не удалось передать предмет');}
+  }
   function updateGrid(grid: Grid) {
     if(campaign)commit({...campaign,maps:campaign.maps.map(map=>map.id===activeMap?.id?{...map,grid}:map)});
   }
@@ -124,7 +131,7 @@ function App() {
     <p hidden={screen!=='configure'} className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <React.Fragment key={activeMap.id}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={activeMap.id}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section></>}
     <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Подготовка и проведение игры · Данные остаются на вашем компьютере</footer>
   </main>;
