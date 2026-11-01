@@ -1,3 +1,5 @@
+import {ZodError} from 'zod';
+import {contentSchema} from '../shared/content.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -11,6 +13,9 @@ async function result<T>(action: () => Promise<T>): Promise<Result<T>> {
   try { return { ok: true, value: await action() }; }
   catch (error) { console.error(error); return { ok: false, error: 'Не удалось выполнить операцию. Проверьте формат, права доступа и свободное место. Карта: PNG/JPG до 15 МБ, до 8192 пикселей по стороне и 32 млн пикселей. Партия: до 100 МБ. Исходный файл не изменяйте.' }; }
 }
+async function importContentResult<T>(action:()=>Promise<T>):Promise<Result<T>> {
+ try{return {ok:true,value:await action()};}catch(error){return {ok:false,error:error instanceof ZodError?`Проверьте поля JSON: ${error.issues.slice(0,5).map(issue=>`${issue.path.join('.')||'файл'}: ${issue.message}`).join('; ')}`:error instanceof SyntaxError?'Некорректный JSON. Проверьте кавычки, запятые и скобки по примеру examples/content-template.json.':error instanceof Error?error.message:'Не удалось импортировать файл'};}
+}
 function validateImages(campaign: import('../shared/campaign.js').Campaign) {
   for (const map of campaign.maps) {
     const image = nativeImage.createFromDataURL(map.image);
@@ -23,12 +28,23 @@ function validateImages(campaign: import('../shared/campaign.js').Campaign) {
       if(image.isEmpty()||size.width>512||size.height>512) throw new Error('Некорректный портрет');
     }
   }
+  const photos=new Set([...campaign.itemTemplates.map(item=>item.image),...campaign.items.map(item=>item.template.image)]);
+  for(const photo of photos)if(photo){const image=nativeImage.createFromDataURL(photo),size=image.getSize();if(image.isEmpty()||size.width>512||size.height>512)throw new Error('Некорректное фото предмета');}
   return campaign;
 }
 app.whenReady().then(() => {
+ ipcMain.handle('campaign:import-content',event=>importContentResult(async()=>{
+  if(event.senderFrame!==window.webContents.mainFrame)throw new Error('Недопустимый запрос');
+  const selected=await dialog.showOpenDialog(window,{title:'Импорт персонажей и предметов',properties:['openFile'],filters:[{name:'Данные JSON',extensions:['json']}]});
+  if(selected.canceled||!selected.filePaths[0])return null;
+  const path=selected.filePaths[0];if((await stat(path)).size>10*1024*1024)throw new Error('Файл импорта превышает 10 МБ');
+  const pack=contentSchema.parse(JSON.parse(await readFile(path,'utf8')) as unknown);
+  for(const photo of [...pack.characters.map(character=>character.portrait),...pack.items.map(item=>item.image)])if(photo){const image=nativeImage.createFromDataURL(photo),size=image.getSize();if(image.isEmpty()||size.width>512||size.height>512)throw new Error('Изображение импорта должно быть PNG до 512 пикселей');}
+  return pack;
+ }));
   ipcMain.handle('campaign:import-portrait',event=>result(async()=>{
     if(event.senderFrame!==window.webContents.mainFrame) throw new Error('Недопустимый запрос');
-    const selected=await dialog.showOpenDialog(window,{title:'Портрет персонажа',properties:['openFile'],filters:[{name:'PNG/JPG',extensions:['png','jpg','jpeg']}]});
+    const selected=await dialog.showOpenDialog(window,{title:'Выбрать изображение',properties:['openFile'],filters:[{name:'PNG/JPG',extensions:['png','jpg','jpeg']}]});
     if(selected.canceled||!selected.filePaths[0]) return null;
     const path=selected.filePaths[0];
     if((await stat(path)).size>15*1024*1024) throw new Error('Портрет превышает 15 МБ');

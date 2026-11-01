@@ -1,0 +1,24 @@
+{
+  "format": "rprison-content",
+  "version": 1,
+  "characters": [
+    {
+      "name": "Новый персонаж",
+      "kind": "character",
+      "footprint": { "width": 1, "height": 1 },
+      "portrait": null,
+      "values": { "strength": 5, "dexterity": 5, "constitution": 5, "charisma": 5, "level": 1, "armor": 0 }
+    },
+    {
+      "name": "Новый NPC",
+      "kind": "npc",
+      "footprint": { "width": 1, "height": 2 },
+      "portrait": null,
+      "values": { "strength": 8, "dexterity": 6, "constitution": 7, "charisma": 4, "level": 1, "armor": 0 }
+    }
+  ],
+  "items": [
+    { "name": "Пример оружия", "category": "weapon", "description": "Замените описание и кости на нужные вам", "damageDice": "1d6", "maxDurability": 100, "maxCharges": 0, "image": null },
+    { "name": "Пример аптечки", "category": "consumable", "description": "Эффект лечения пока применяется мастером вручную", "damageDice": null, "maxDurability": 0, "maxCharges": 3, "image": null }
+  ]
+}

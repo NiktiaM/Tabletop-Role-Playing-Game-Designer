@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import {portraitSchema} from './images.js';
+export {portraitSchema} from './images.js';
+import type {ContentPack} from './content.js';
 import {itemTemplateSchema,itemInstanceSchema} from './items.js';
 import {rPrisonDraft} from '../domain/presets/rprison.js';
 import {rulesetSchema,emptyRuleset,statKey} from './rules.js';
@@ -31,7 +34,7 @@ export const mapSchema = z.object({
   if(points.some(p=>p.x>map.width||p.y>map.height))ctx.addIssue({code:'custom',message:'Разметка выходит за границы изображения'});
  }
 });
-export const portraitSchema = z.string().max(2*1024*1024).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/);
+
 export const characterSchema = z.object({
  values:z.record(statKey,z.number().finite().min(-1e9).max(1e9)).refine(values=>Object.keys(values).length<=256).default({}),
  id:z.uuid(), name:z.string().trim().min(1).max(120), kind:z.enum(['character','npc']),
@@ -42,7 +45,7 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(8), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(9), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   const ids = new Set(c.maps.map(m => m.id));
@@ -66,10 +69,10 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 8, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 9, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7)) {
-    return campaignSchema.parse({ ...input, schemaVersion: 8 });
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8)) {
+    return campaignSchema.parse({ ...input, schemaVersion: 9 });
   }
   return campaignSchema.parse(input);
 }
@@ -81,10 +84,11 @@ export interface CampaignAPI {
   create(name: string): Promise<Result<Campaign>>;
   save(campaign: Campaign): Promise<Result<{ campaign: Campaign; fileName: string } | null>>;
   open(): Promise<Result<{ campaign: Campaign; fileName: string } | null>>;
+  importContent(): Promise<Result<ContentPack | null>>;
   importPortrait(): Promise<Result<string | null>>;
   importMap(): Promise<Result<GameMap | null>>;
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 8, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 9, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }
