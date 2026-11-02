@@ -1,3 +1,5 @@
+import {CharacterValues} from './CharacterValues.js';
+import {effectiveStats} from '../domain/effective-stats.js';
 import {LevelSummary} from './LevelSummary.js';
 import React,{useEffect,useState} from 'react';
 import type {Campaign,Character} from '../shared/campaign.js';
@@ -6,23 +8,27 @@ import {resourceBudget} from '../domain/resources.js';
 import {currentActor} from '../domain/encounter.js';
 
 type ResourceChange=(id:string,key:string,value:number|null)=>boolean;
-export function CharacterCard({campaign,character,onResource,onClose}:{campaign:Campaign;character:Character;onResource:ResourceChange;onClose:()=>void}){
+export function CharacterCard({campaign,character,onResource,onClose,onValues,onAddStats,onActions}:{campaign:Campaign;character:Character;onResource:ResourceChange;onClose:()=>void;onValues:(id:string,values:Record<string,number>)=>boolean;onAddStats:()=>void;onActions:(id:string)=>void}){
+ const [editing,setEditing]=useState(false);
  let stats:ReturnType<typeof evaluateStats>=[],error='';
- try{stats=evaluateStats(campaign.ruleset,character.values);}catch(e){error=e instanceof Error?e.message:'Не удалось рассчитать характеристики';}
+ try{stats=effectiveStats(campaign,character);}catch(e){error=e instanceof Error?e.message:'Не удалось рассчитать характеристики';}
  const items=campaign.items.filter(item=>item.ownerId===character.id),abilities=campaign.abilities.filter(ability=>ability.ownerId===character.id);
  return <aside className="character-card" aria-label={`Карточка: ${character.name}`}>
  <div className="card-heading"><h3>{character.name}</h3><button onClick={onClose} aria-label="Закрыть карточку персонажа">Закрыть</button></div>
  {character.portrait&&<img className="portrait-preview" src={character.portrait} alt="Портрет"/>}<p>{character.kind==='npc'?'NPC':'Персонаж'} · {character.footprint.width}×{character.footprint.height} клеток</p>
  {campaign.encounter&&<p>{currentActor(campaign)===character.id?'Сейчас его ход':campaign.encounter.participants.some(row=>row.characterId===character.id)?'Ожидает своего хода':'Не участвует в бою'}</p>}
+ <div className="card-quick-resources">{([[campaign.ruleset.healthStat,'HP'],[campaign.ruleset.movement.budgetStat,'ОД']] as const).map(([key,label])=>{if(!key)return null;try{const v=resourceBudget(campaign,character,key);return <strong key={label}>{label} {Number(v.remaining.toFixed(3))}/{v.maximum}</strong>;}catch{return null;}})}</div>
  <LevelSummary character={character} rules={campaign.ruleset}/>
+ <h4>Характеристики</h4>{error&&<p role="alert">{error}</p>}<dl>{stats.map(stat=><div key={stat.key} title={stat.explanation}><dt>{stat.name}</dt><dd>{Number(stat.value.toFixed(3))}</dd></div>)}</dl>
+ <button onClick={()=>setEditing(!editing)}>Изменить характеристики</button><button onClick={()=>onActions(character.id)}>Действия / выбрать целью</button>{!stats.length&&<button onClick={onAddStats}>Добавить характеристики R Prison</button>}{editing&&<CharacterValues character={character} rules={campaign.ruleset} onSave={values=>onValues(character.id,values)}/>}
  <h4>Текущие ресурсы</h4>
  {campaign.ruleset.healthStat?<ResourceControl key={`hp-${character.id}`} campaign={campaign} character={character} statKey={campaign.ruleset.healthStat} name="HP" onChange={onResource}/>:<p>Показатель HP не настроен. Выберите максимум HP в конфигураторе → «Правила».</p>}
  {campaign.ruleset.movement.budgetStat?<ResourceControl key={`ap-${character.id}`} campaign={campaign} character={character} statKey={campaign.ruleset.movement.budgetStat} name="ОД" onChange={onResource}/>:<p>Показатель ОД не настроен в правилах.</p>}
- <p className="hint">Ресурсы общие для всех токенов персонажа. Изменения ручные; 0 HP не удаляет персонажа и не пропускает его ход.</p>
- <h4>Характеристики</h4>{error&&<p role="alert">{error}</p>}<dl>{stats.map(stat=><div key={stat.key} title={stat.explanation}><dt>{stat.name}</dt><dd>{Number(stat.value.toFixed(3))}</dd></div>)}</dl>
+ <p className="hint">Ресурсы общие для всех токенов персонажа; 0 HP не удаляет персонажа; пропуск хода задаётся настройкой боя.</p>
+
  <h4>Инвентарь ({items.length})</h4>{items.map(item=><article key={item.id}>{item.template.image&&<img className="item-photo" src={item.template.image} alt=""/>}<strong>{item.template.name}</strong><p>Прочность {item.durability}/{item.template.maxDurability} · заряды {item.charges}/{item.template.maxCharges}{item.equipped?' · экипирован':''}</p></article>)}{!items.length&&<p>Инвентарь пуст.</p>}
  <h4>Способности ({abilities.length})</h4>{abilities.map(ability=><article key={ability.id}><strong>{ability.definition.name}</strong><p>{ability.definition.description}</p><p>{ability.definition.costText||'Стоимость не указана'} · {ability.definition.maxUses?`${ability.usesRemaining}/${ability.definition.maxUses}`:'без лимита'}</p></article>)}{!abilities.length&&<p>Нет назначенных способностей.</p>}
- <p className="hint">Для выдачи и передачи вещей откройте «Инвентари»; ручные счётчики находятся во вкладке «Способности». Атаки и эффекты здесь пока не применяются.</p>
+ <p className="hint">Для выдачи и передачи вещей откройте «Инвентари»; ручные счётчики находятся во вкладке «Способности». Применение атак, способностей и вещей доступно в «Действиях».</p>
  </aside>;
 }
 

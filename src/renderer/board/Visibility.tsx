@@ -1,0 +1,3 @@
+import React,{useId} from 'react';
+import type {Camera,GameMap} from '../../shared/campaign.js';
+export function Visibility({map,camera}:{map:GameMap;camera:Camera}){const id=useId().replaceAll(':','');return <svg className="night-overlay" aria-label="Ночное освещение" width="100%" height="100%"><defs><mask id={id}><rect width="100%" height="100%" fill="white"/>{map.annotations.filter(a=>a.kind==='light').map(a=>a.kind==='light'&&<circle key={a.id} cx={camera.x+a.center.x*camera.zoom} cy={camera.y+a.center.y*camera.zoom} r={a.radius*camera.zoom} fill="black"/>)}</mask></defs><rect width="100%" height="100%" fill="#020610" opacity=".65" mask={`url(#${id})`}/></svg>;}

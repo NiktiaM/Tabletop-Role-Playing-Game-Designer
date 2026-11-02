@@ -1,7 +1,9 @@
+import {terrainAt} from './environment.js';
+import {terrainSchema} from '../shared/gameplay.js';
 import type {GameMap,Character,Token} from '../shared/campaign.js';
 import {cellOrigin,type Point} from './grid.js';
 import {footprintFits,footprintsOverlap,type Cell} from './tokens.js';
-export interface MovementOptions {mode:'meters'|'cells';diagonal:boolean}
+export interface MovementOptions {mode:'meters'|'cells';diagonal:boolean;terrain?:ReturnType<typeof terrainSchema.parse>}
 const key=(cell:Cell)=>`${cell.column},${cell.row}`;
 const cross=(a:Point,b:Point,c:Point)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
 function hull(points:Point[]):Point[]{
@@ -45,8 +47,9 @@ export function reachable(map:GameMap,token:Token,characters:Character[],tokens:
  const character=characters.find(c=>c.id===token.characterId);if(!character)throw new Error('Персонаж не найден');
  const cells:Reachable['cells']=new Map([[key(token),{cell:{column:token.column,row:token.row},cost:0,previous:null}]]),heap=new Heap();heap.push({cell:token,cost:0});
  const directions=[[1,0],[-1,0],[0,1],[0,-1],...(options.diagonal?[[1,1],[1,-1],[-1,1],[-1,-1]]:[])];let limited=false;
+ const terrainCache=new Map<string,ReturnType<typeof terrainAt>>();const sample=(cell:Cell)=>{const id=key(cell),cached=terrainCache.get(id);if(cached)return cached;const value=terrainAt(map,cell,character.footprint);terrainCache.set(id,value);return value;};
  while(heap.data.length){const current=heap.pop();if(current.cost>cells.get(key(current.cell))!.cost+1e-9)continue;
-  for(const [dx,dy] of directions){const cell={column:current.cell.column+dx,row:current.cell.row+dy};const cost=current.cost+(options.mode==='cells'?1:map.grid.metersPerCell*(dx&&dy?Math.SQRT2:1));if(cost>budget+1e-9)continue;const old=cells.get(key(cell));if(old&&old.cost<=cost+1e-9)continue;if(!stepAllowed(map,current.cell,cell,character,token,tokens,characters))continue;if(!old&&cells.size>=maxCells){limited=true;continue;}cells.set(key(cell),{cell,cost,previous:key(current.cell)});heap.push({cell,cost});}
+  for(const [dx,dy] of directions){const cell={column:current.cell.column+dx,row:current.cell.row+dy};const terrain=options.terrain,fromTerrain=terrain?sample(current.cell):null,toTerrain=terrain?sample(cell):null;const cost=current.cost+(options.mode==='cells'?1:map.grid.metersPerCell*(dx&&dy?Math.SQRT2:1))*(toTerrain?.liquid?terrain!.liquidMultiplier:1)+(terrain?Math.max(0,toTerrain!.height-fromTerrain!.height)*terrain.climbCost:0);if(cost>budget+1e-9)continue;const old=cells.get(key(cell));if(old&&old.cost<=cost+1e-9)continue;if(!stepAllowed(map,current.cell,cell,character,token,tokens,characters))continue;if(!old&&cells.size>=maxCells){limited=true;continue;}cells.set(key(cell),{cell,cost,previous:key(current.cell)});heap.push({cell,cost});}
  }
  return {cells,limited};
 }

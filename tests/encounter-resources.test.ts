@@ -14,7 +14,7 @@ import {checkCompatibility} from '../src/domain/transfer.js';
 function fixture():Campaign {
  const c=createCampaign('Бой'),a:Character={id:crypto.randomUUID(),name:'Герой',kind:'character',portrait:null,footprint:{width:1,height:1},values:{dexterity:5},resources:{hp_max:4,ap_max:2}},b:Character={...a,id:crypto.randomUUID(),name:'NPC',kind:'npc',values:{dexterity:18},resources:{hp_max:0,ap_max:1}},outsider:Character={...a,id:crypto.randomUUID(),name:'Наблюдатель',resources:{ap_max:0}};
  const map={id:crypto.randomUUID(),name:'Поле',width:600,height:600,image:'data:image/png;base64,AAAA',grid:{...defaultGrid(),cellSizePx:100},annotations:[]};
- return {...c,session:{started:true,tacticalMovement:false},characters:[a,b,outsider],maps:[map],tokens:[{id:crypto.randomUUID(),mapId:map.id,characterId:a.id,column:1,row:1},{id:crypto.randomUUID(),mapId:map.id,characterId:b.id,column:3,row:1}]};
+ return {...c,gameplay:{...c.gameplay,skipDefeatedTurns:false},session:{started:true,tacticalMovement:false},characters:[a,b,outsider],maps:[map],tokens:[{id:crypto.randomUUID(),mapId:map.id,characterId:a.id,column:1,row:1},{id:crypto.randomUUID(),mapId:map.id,characterId:b.id,column:3,row:1}]};
 }
 const participants=(c:Campaign)=>c.characters.slice(0,2).map((character,index)=>({characterId:character.id,initiative:10-index}));
 

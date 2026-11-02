@@ -1,7 +1,8 @@
+import {mechanicsSchema} from './mechanics.js';
 import {z} from 'zod';
 import {portraitSchema} from './images.js';
 export const itemTemplateSchema=z.object({
- image:portraitSchema.nullable().default(null),
+mechanics:mechanicsSchema.optional(), image:portraitSchema.nullable().default(null),
  id:z.uuid(),revision:z.number().int().min(1).max(1000000),name:z.string().trim().min(1).max(120),
  category:z.enum(['weapon','armor','consumable','other']),description:z.string().max(2000),
  damageDice:z.string().max(20).regex(/^(?:[1-9]|[1-9][0-9])d(?:[2-9]|[1-9][0-9]{1,2}|1000)(?:[+-][0-9]{1,4})?$/).nullable(),

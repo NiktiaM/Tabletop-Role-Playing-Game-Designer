@@ -32,6 +32,7 @@ export function AnnotationTools({items,tool,onTool,points,onClear,selected,onSel
   else setError('Не удалось применить: максимум 500 объектов на карте; координаты должны находиться внутри изображения.');
  }
  return <section className="annotation-tools"><h3>Разметка карты</h3>
+ <div className="editor-palette">{([['select','↖','Выбор'],['wall','╱','Стена'],['cover','▭','Укрытие'],['elevation','⛰','Высота'],['liquid','≈','Жидкость'],['light','☼','Свет']] as const).map(([value,icon,label])=><button key={value} type="button" title={label} aria-label={`Инструмент: ${label}`} aria-pressed={tool===value} onClick={()=>{onTool(value);onSelect(null);onClear();setName('');}}>{icon}</button>)}</div>
  <label>Инструмент разметки<select value={tool} onChange={event=>{onTool(event.target.value as AnnotationTool);onSelect(null);onClear();setError('');setName('');}}>
  <option value="none">Камера и токены</option><option value="select">Выбрать разметку на карте</option>
  {Object.entries(annotationNames).map(([value,name])=><option key={value} value={value}>{name}</option>)}

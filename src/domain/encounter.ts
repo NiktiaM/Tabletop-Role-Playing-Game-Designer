@@ -1,3 +1,4 @@
+import {tickEffects,preserveResources} from './game-actions.js';
 import {campaignSchema,type Campaign} from '../shared/campaign.js';
 import {encounterSchema,type Participant,type Recovery} from '../shared/encounter.js';
 import {resourceBudget} from './resources.js';
@@ -22,14 +23,19 @@ export function startEncounter(campaign:Campaign,participants:Participant[],reco
  const encounter=checked.data;
  for(const row of encounter.participants){const character=campaign.characters.find(character=>character.id===row.characterId);if(!character)throw new Error('Участник не найден');resourceBudget(campaign,character,apStat);}
  if(sort)encounter.participants.sort((a,b)=>b.initiative-a.initiative);
+ if(campaign.gameplay.skipDefeatedTurns&&campaign.ruleset.healthStat){const index=encounter.participants.findIndex(p=>resourceBudget(campaign,campaign.characters.find(ch=>ch.id===p.characterId)!,campaign.ruleset.healthStat!).remaining>0);if(index<0)throw new Error('Нет участников с положительными HP');encounter.turnIndex=index;}
  const started=campaignSchema.parse({...campaign,session:{...campaign.session,tacticalMovement:true},encounter});
  return enterTurn(started,true);
 }
 
 export function nextTurn(campaign:Campaign):Campaign {
+ if(campaign.pendingAttack)throw new Error('Сначала примените или отмените расчёт атаки');
  const encounter=campaign.encounter;if(!encounter)throw new Error('Бой не начат');
- const turnIndex=(encounter.turnIndex+1)%encounter.participants.length,newRound=turnIndex===0;
- const next=campaignSchema.parse({...campaign,encounter:{...encounter,turnIndex,round:encounter.round+(newRound?1:0)}});
+ const outgoing=currentActor(campaign)!;campaign=tickEffects(campaign,outgoing);
+ let turnIndex=encounter.turnIndex,round=encounter.round,found=false;
+ for(let count=0;count<encounter.participants.length;count++){turnIndex=(turnIndex+1)%encounter.participants.length;if(turnIndex===0)round++;const id=encounter.participants[turnIndex].characterId,ch=campaign.characters.find(c=>c.id===id)!;if(!campaign.gameplay.skipDefeatedTurns||!campaign.ruleset.healthStat||resourceBudget(campaign,ch,campaign.ruleset.healthStat).remaining>0){found=true;break;}if(id!==outgoing)campaign=tickEffects(campaign,id);}
+ if(!found)return endEncounter(campaign);
+ const newRound=round!==encounter.round,next=campaignSchema.parse({...campaign,encounter:{...encounter,turnIndex,round}});
  return enterTurn(next,newRound);
 }
 
@@ -42,5 +48,5 @@ export function reorderEncounter(campaign:Campaign,ids:string[]):Campaign {
 
 export function endEncounter(campaign:Campaign):Campaign {
  if(!campaign.encounter)throw new Error('Бой не начат');
- return campaignSchema.parse({...campaign,encounter:null,session:{...campaign.session,tacticalMovement:campaign.encounter.previousTacticalMovement}});
+ return campaignSchema.parse(preserveResources(campaign,{...campaign,pendingAttack:null,effects:campaign.effects.filter(e=>e.encounterId!==campaign.encounter!.id),encounter:null,session:{...campaign.session,tacticalMovement:campaign.encounter.previousTacticalMovement}}));
 }

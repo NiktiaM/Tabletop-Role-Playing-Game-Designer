@@ -1,8 +1,8 @@
 import {campaignSchema,type Campaign,type Character} from '../shared/campaign.js';
-import {evaluateStats} from './rules/evaluate.js';
+import {effectiveStats} from './effective-stats.js';
 
 export function resourceBudget(campaign:Campaign,character:Character,key:string){
- const maximum=evaluateStats(campaign.ruleset,character.values).find(row=>row.key===key)?.value;
+ const maximum=effectiveStats(campaign,character).find(row=>row.key===key)?.value;
  if(maximum===undefined||!Number.isFinite(maximum)||maximum<0||maximum>1000000)throw new Error('Максимум ресурса должен быть от 0 до 1000000');
  return {key,maximum,remaining:Math.min(maximum,character.resources[key]??maximum)};
 }
