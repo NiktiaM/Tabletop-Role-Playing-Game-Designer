@@ -1,3 +1,4 @@
+import {diceRollSchema} from './dice.js';
 import {encounterSchema} from './encounter.js';
 import { z } from 'zod';
 import {abilitySchema,assignedAbilitySchema} from './abilities.js';
@@ -33,7 +34,7 @@ export const mapSchema = z.object({
 }).strict().refine(m => m.width * m.height <= 32_000_000, 'Карта должна содержать не более 32 млн пикселей').superRefine((map,ctx)=>{
  if(new Set(map.annotations.map(item=>item.id)).size!==map.annotations.length)ctx.addIssue({code:'custom',message:'Повторяющиеся объекты разметки'});
  for(const item of map.annotations){
-  const points=item.kind==='light'?[item.center]:[item.from,item.to];
+  const points=item.kind==='light'?[item.center]:[item.from,item.to,...(('brush' in item&&item.brush)?item.brush.points:[])];
   if(points.some(p=>p.x>map.width||p.y>map.height))ctx.addIssue({code:'custom',message:'Разметка выходит за границы изображения'});
  }
 });
@@ -49,9 +50,10 @@ export const tokenSchema = z.object({id:z.uuid(),mapId:z.uuid(),characterId:z.uu
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(15),encounter:encounterSchema.nullable().default(null),session:z.object({started:z.boolean(),tacticalMovement:z.boolean()}).strict().refine(session=>!session.tacticalMovement||session.started,'Тактическое движение доступно только в начатой игре').default({started:false,tacticalMovement:false}), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(16),diceRolls:z.array(diceRollSchema).max(200).default([]),encounter:encounterSchema.nullable().default(null),session:z.object({started:z.boolean(),tacticalMovement:z.boolean()}).strict().refine(session=>!session.tacticalMovement||session.started,'Тактическое движение доступно только в начатой игре').default({started:false,tacticalMovement:false}), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
+  if(new Set(c.diceRolls.map(roll=>roll.id)).size!==c.diceRolls.length)ctx.addIssue({code:'custom',message:'Повторяющиеся броски'});
   const ids = new Set(c.maps.map(m => m.id));
   const characters=new Map(c.characters.map(character=>[character.id,character]));
   if(c.encounter){if(!c.session.started||!c.session.tacticalMovement)ctx.addIssue({code:'custom',message:'Бой требует начатой игры и расхода ОД'});if(c.encounter.apStat!==c.ruleset.movement.budgetStat)ctx.addIssue({code:'custom',message:'Сначала завершите бой, чтобы изменить показатель ОД'});if(c.encounter.participants.some(row=>!characters.has(row.characterId)))ctx.addIssue({code:'custom',message:'Сначала завершите бой, чтобы удалить участника'});}
@@ -78,15 +80,15 @@ export const campaignSchema = z.object({
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 15, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 16, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9 || input.schemaVersion === 10 || input.schemaVersion === 11 || input.schemaVersion === 12 || input.schemaVersion === 13 || input.schemaVersion === 14)) {
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9 || input.schemaVersion === 10 || input.schemaVersion === 11 || input.schemaVersion === 12 || input.schemaVersion === 13 || input.schemaVersion === 14 || input.schemaVersion === 15)) {
     let rules=input&&typeof input==='object'&&'ruleset' in input?input.ruleset:undefined;
     if(rules&&typeof rules==='object'&&!('movement' in rules)){
       const checked=rulesetSchema.parse(rules),preset=rPrisonDraft(),known=preset.stats.find(stat=>stat.key===preset.movement.budgetStat);
       if(known?.kind==='derived'&&checked.stats.some(stat=>stat.key===known.key&&stat.kind==='derived'&&stat.formula.replace(/\s+/g,'')===known.formula.replace(/\s+/g,'')))rules={...checked,movement:preset.movement};
     }
-    return campaignSchema.parse({ ...input, ...(rules?{ruleset:rules}:{}), schemaVersion: 15 });
+    return campaignSchema.parse({ ...input, ...(rules?{ruleset:rules}:{}), schemaVersion: 16 });
   }
   return campaignSchema.parse(input);
 }
@@ -106,5 +108,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 15, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 16, ruleset:rPrisonDraft(), id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }

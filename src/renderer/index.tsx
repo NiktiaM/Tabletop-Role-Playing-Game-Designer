@@ -6,6 +6,7 @@ import { campaignSchema } from '../shared/campaign.js';
 import type { Annotation } from '../shared/annotations.js';
 import {placeItem,takeItem} from '../domain/ground-items.js';
 import {setResource} from '../domain/resources.js';
+import {DiceTray} from './DiceTray.js';
 import {Encounter} from './Encounter.js';
 import {startGame,setTacticalMovement} from '../domain/session.js';
 import {moveWithPath,movementBudget} from '../domain/movement-action.js';
@@ -22,6 +23,7 @@ import { Board } from './board/Board.js';
 import type { Camera, Grid } from '../shared/campaign.js';
 declare global { interface Window { campaigns: CampaignAPI } }
 function App() {
+  const [loadEpoch,setLoadEpoch]=useState(0);
   const [leftPanel,setLeftPanel]=useState<'characters'|'battle'|null>(null),[rightPanel,setRightPanel]=useState<'items'|'inventory'|'abilities'|null>(null);
   const [fullScreen,setFullScreen]=useState(false);
   useEffect(()=>{const update=()=>setFullScreen(!!document.fullscreenElement);document.addEventListener('fullscreenchange',update);return()=>document.removeEventListener('fullscreenchange',update);},[]);
@@ -52,7 +54,7 @@ function App() {
     await run(async()=>{
       const result=await window.campaigns.open();
       if(!result.ok){setMessage(result.error);return;}
-      if(result.value){setCampaign(result.value.campaign);setScreen(result.value.campaign.session.started?'play':'configure');setUndoMove(null);setSetupMode(false);setDirty(false);setPlacementId(null);showMap();setMessage(`Открыто: ${result.value.fileName}`);}
+      if(result.value){setLoadEpoch(value=>value+1);setCampaign(result.value.campaign);setScreen(result.value.campaign.session.started?'play':'configure');setUndoMove(null);setSetupMode(false);setDirty(false);setPlacementId(null);showMap();setMessage(`Открыто: ${result.value.fileName}`);}
     });
   }
   function leaveParty() {
@@ -121,7 +123,7 @@ function App() {
     <div className="workspace-actions"><button className="secondary" disabled={busy} onClick={leaveParty}>К выбору партии</button><button className="secondary" disabled={busy} onClick={()=>void openParty()}>Открыть партию…</button>
 <button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></div></section>
     <section className="session-bar" aria-label="Режим приложения"><strong>{screen==='configure'?'Подготовка · Конфигуратор':'Проведение игры'}</strong>
-    {screen==='configure'?<><button disabled={busy||!campaign.maps.length} onClick={openGame}>{campaign.session.started?'Вернуться в игру':'Начать игру'}</button>{!campaign.maps.length&&<span>Добавьте поле, чтобы начать игру.</span>}</>:<><button disabled={busy} onClick={openConfigurator}>Открыть конфигуратор</button><label className="grid-toggle"><input type="checkbox" checked={campaign.session.tacticalMovement} disabled={busy||!!campaign.encounter} onChange={event=>commit(setTacticalMovement(campaign,event.target.checked),'Режим движения изменён без сброса ОД.')}/>Тактическое движение (расход ОД)</label><span>{campaign.session.tacticalMovement?'Расход ОД включён.':'Свободная игра: путь проверяется, ОД не расходуются.'}</span><button onClick={()=>{void (document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>setMessage('Не удалось переключить полный экран.'));}}>{fullScreen?'Выйти из полного экрана':'На весь экран'}</button></>}
+    {screen==='configure'?<><button disabled={busy||!campaign.maps.length} onClick={openGame}>{campaign.session.started?'Вернуться в игру':'Начать игру'}</button>{!campaign.maps.length&&<span>Добавьте поле, чтобы начать игру.</span>}</>:<><button disabled={busy} onClick={openConfigurator}>Открыть конфигуратор</button><label className="grid-toggle"><input type="checkbox" checked={campaign.session.tacticalMovement} disabled={busy||!!campaign.encounter} onChange={event=>commit(setTacticalMovement(campaign,event.target.checked),'Режим движения изменён без сброса ОД.')}/>Тактическое движение (расход ОД)</label><span>{campaign.session.tacticalMovement?'Расход ОД включён.':'Свободная игра: путь проверяется, ОД не расходуются.'}</span><button onClick={()=>{void (document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>setMessage('Не удалось переключить полный экран.'));}}>{fullScreen?'Выйти из полного экрана':'На весь экран'}</button><DiceTray key={`${campaign.id}-${loadEpoch}`} campaign={campaign} onChange={commit}/></>}
     </section>
     {screen==='play'&&<div id="panel-battle" role="tabpanel" aria-labelledby="tab-battle" hidden={leftPanel!=='battle'} inert={busy}><Encounter key={campaign.id} campaign={campaign} onChange={(next,message)=>{const accepted=commit(next,message);if(accepted&&!campaign.encounter&&next.encounter)showMap();return accepted;}} onCharacter={id=>{setInspectedId(id);showMap();}}/></div>}
     <nav className="workspace-tabs" role="tablist" aria-multiselectable={screen==='play'} aria-label="Разделы партии">
@@ -145,7 +147,7 @@ function App() {
     <p hidden={screen!=='configure'} className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <React.Fragment key={activeMap.id}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board inspectedId={inspectedId} onInspect={id=>{setInspectedId(id);if(id)showMap();}} onResource={changeResource} onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={screen==='play'||tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={activeMap.id} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={`${activeMap.id}-${loadEpoch}`}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board inspectedId={inspectedId} onInspect={id=>{setInspectedId(id);if(id)showMap();}} onResource={changeResource} onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={screen==='play'||tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={`${activeMap.id}-${loadEpoch}`} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section></>}
     <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Подготовка и проведение игры · Данные остаются на вашем компьютере</footer>
   </main>;
