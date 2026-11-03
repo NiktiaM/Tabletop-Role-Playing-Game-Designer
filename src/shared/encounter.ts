@@ -1,10 +1,10 @@
 import {z} from 'zod';
 import {statKey} from './rules.js';
 
-export const participantSchema=z.object({characterId:z.uuid(),roll:z.number().int().min(1).max(20).optional(),modifier:z.number().int().min(-1000000).max(1000000).optional(),initiative:z.number().finite().min(-1000000).max(1000000)}).strict().refine(row=>(row.roll===undefined&&row.modifier===undefined)||(row.roll!==undefined&&row.modifier!==undefined&&row.initiative===row.roll+row.modifier),'Неверный результат инициативы');
+export const participantSchema=z.object({surprised:z.boolean().optional(),availableRound:z.number().int().positive().optional(),characterId:z.uuid(),roll:z.number().int().min(1).max(20).optional(),modifier:z.number().int().min(-1000000).max(1000000).optional(),initiative:z.number().finite().min(-1000000).max(1000000)}).strict().refine(row=>(row.roll===undefined&&row.modifier===undefined)||(row.roll!==undefined&&row.modifier!==undefined&&row.initiative===row.roll+row.modifier),'Неверный результат инициативы');
 export const recoverySchema=z.enum(['turn','round','manual']);
 export const encounterSchema=z.object({
- id:z.uuid(),participants:z.array(participantSchema).min(1).max(200),
+ name:z.string().max(120).optional(),startedAt:z.number().nonnegative().optional(),id:z.uuid(),participants:z.array(participantSchema).min(1).max(200),
  round:z.number().int().min(1).max(1000000),turnIndex:z.number().int().min(0).max(199),
  recovery:recoverySchema,apStat:statKey,previousTacticalMovement:z.boolean(),
 }).strict().superRefine((encounter,ctx)=>{

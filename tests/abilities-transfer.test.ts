@@ -1,5 +1,6 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
-import {createCampaign,campaignSchema,parseCampaign} from '../src/shared/campaign.js';
+import {campaignSchema,parseCampaign} from '../src/shared/campaign.js';
 import {abilitySchema,assignedAbilitySchema} from '../src/shared/abilities.js';
 import {exportCharacter,importCharacter,checkCompatibility} from '../src/domain/transfer.js';
 import {createItem} from '../src/domain/items.js';

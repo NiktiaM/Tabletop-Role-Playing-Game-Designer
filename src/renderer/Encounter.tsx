@@ -1,3 +1,4 @@
+import {PrisonEncounter} from './PrisonEncounter.js';
 import React,{useEffect,useState} from 'react';
 import type {Campaign} from '../shared/campaign.js';
 import type {Recovery} from '../shared/encounter.js';
@@ -6,7 +7,7 @@ import {startEncounter,nextTurn,endEncounter,reorderEncounter,currentActor} from
 import {resourceBudget} from '../domain/resources.js';
 
 const recoveryNames:Record<Recovery,string>={turn:'Полностью в начале своего хода',round:'Полностью в начале раунда',manual:'Только вручную'};
-export function Encounter({campaign,onChange,onCharacter}:{campaign:Campaign;onChange:(next:Campaign,message:string)=>boolean;onCharacter:(id:string)=>void}){
+function LegacyEncounter({campaign,onChange,onCharacter}:{campaign:Campaign;onChange:(next:Campaign,message:string)=>boolean;onCharacter:(id:string)=>void}){
  const [rows,setRows]=useState<{id:string;selected:boolean;initiative:string}[]>([]),[recovery,setRecovery]=useState<Recovery>('turn'),[sort,setSort]=useState(true),[automatic,setAutomatic]=useState(true),[error,setError]=useState('');
  useEffect(()=>setRows(previous=>campaign.characters.map(character=>previous.find(row=>row.id===character.id)??{id:character.id,selected:false,initiative:'0'})),[campaign.characters]);
  function act(action:()=>Campaign,message:string){try{if(onChange(action(),message))setError('');else setError('Изменение боя отклонено');}catch(e){setError(e instanceof Error?e.message:'Не удалось изменить бой');}}
@@ -30,3 +31,5 @@ export function Encounter({campaign,onChange,onCharacter}:{campaign:Campaign;onC
  </>}{error&&<p role="alert">{error}</p>}
  </section>;
 }
+
+export function Encounter(props:Parameters<typeof LegacyEncounter>[0]){return props.campaign.gameplay.rulesVersion==='prison03'?<PrisonEncounter {...props}/>:<LegacyEncounter {...props}/>;}

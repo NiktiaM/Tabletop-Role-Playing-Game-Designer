@@ -1,9 +1,10 @@
+import {PrisonActions} from './PrisonActions.js';
 import React,{useEffect,useState} from 'react';
 import type {Campaign} from '../shared/campaign.js';
 import {currentActor} from '../domain/encounter.js';
 import {previewAttack,applyAttack,calculateAttack,useAbility,useItem,pickupItem,awardExperience,breakWall,event,preserveResources,strikeWall} from '../domain/game-actions.js';
 import type {AttackInput} from '../shared/gameplay.js';
-export function BattleActions({campaign,onChange,onAction,suggestedTarget}:{campaign:Campaign;onChange:(next:Campaign,message:string)=>boolean;onAction:(next:Campaign,message:string)=>boolean;suggestedTarget:string|null}){
+function LegacyBattleActions({campaign,onChange,onAction,suggestedTarget}:{campaign:Campaign;onChange:(next:Campaign,message:string)=>boolean;onAction:(next:Campaign,message:string)=>boolean;suggestedTarget:string|null}){
  const [selectedActor,setSelectedActor]=useState(''),[actorTokenId,setActorTokenId]=useState(''),[targetToken,setTargetToken]=useState(''),[weaponId,setWeaponId]=useState(''),[fallbackMode,setMode]=useState<AttackInput['mode']>('melee'),[reaction,setReaction]=useState<AttackInput['reaction']>('none'),[target,setTarget]=useState(''),[ability,setAbility]=useState(''),[item,setItem]=useState(''),[npc,setNpc]=useState(''),[recipients,setRecipients]=useState<string[]>([]),[confirm,setConfirm]=useState(false),[wall,setWall]=useState(''),[wallDamage,setWallDamage]=useState('1'),[error,setError]=useState('');
  const actorId=currentActor(campaign)??selectedActor,actor=campaign.characters.find(ch=>ch.id===actorId),actorTokens=campaign.tokens.filter(t=>t.characterId===actorId&&t.mapId===campaign.view.activeMapId),actorToken=actorTokens.find(t=>t.id===actorTokenId)??actorTokens[0],weapons=campaign.items.filter(i=>i.ownerId===actorId&&i.equipped&&i.template.category==='weapon');
  const mode=campaign.items.find(i=>i.id===weaponId)?.template.mechanics?.attackType??fallbackMode;
@@ -22,3 +23,5 @@ export function BattleActions({campaign,onChange,onAction,suggestedTarget}:{camp
  <details><summary>Журнал действий</summary>{[...campaign.events].reverse().map(e=><p key={e.id}>{e.message}</p>)}</details>
  </section>;
 }
+
+export function BattleActions(props:Parameters<typeof LegacyBattleActions>[0]){return props.campaign.gameplay.rulesVersion==='prison03'?<PrisonActions {...props}/>:<LegacyBattleActions {...props}/>;}

@@ -1,7 +1,8 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
 import {readFile} from 'node:fs/promises';
 import {contentSchema} from '../src/shared/content.js';
-import {createCampaign,parseCampaign} from '../src/shared/campaign.js';
+import {parseCampaign} from '../src/shared/campaign.js';
 import {mergeContent} from '../src/domain/content.js';
 import {giveInventory} from '../src/domain/inventory.js';
 const pack={format:'rprison-content',version:1,characters:[{name:'NPC',kind:'npc',footprint:{width:1,height:1},portrait:null,values:{strength:8}}],items:[{name:'Меч',category:'weapon',description:'',damageDice:'1d6',maxDurability:100,maxCharges:3,image:null}]};

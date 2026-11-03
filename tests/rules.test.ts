@@ -1,8 +1,9 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
 import {parseFormula,evaluateFormula} from '../src/domain/rules/formula.js';
 import {evaluateStats} from '../src/domain/rules/evaluate.js';
 import {emptyRuleset,rulesetSchema} from '../src/shared/rules.js';
-import {createCampaign,parseCampaign} from '../src/shared/campaign.js';
+import {parseCampaign} from '../src/shared/campaign.js';
 const rules={...emptyRuleset(),stats:[
  {key:'body',name:'Тело',kind:'base' as const,defaultValue:5},
  {key:'level',name:'Уровень',kind:'base' as const,defaultValue:1},
@@ -35,6 +36,6 @@ test('правила и исходные значения восстанавли
  const next={...c,ruleset:rules,characters:[{id,name:'Герой',kind:'character',footprint:{width:1,height:1},portrait:null,values:{body:10}}]};
  const reopened=parseCampaign(JSON.parse(JSON.stringify(next)));expect(reopened.ruleset).toEqual(rules);expect(reopened.characters[0].values).toEqual({body:10});
  expect(evaluateStats(reopened.ruleset,reopened.characters[0].values).find(row=>row.key==='hp')?.value).toBe(22);
- const {ruleset,...old}=c;const migrated=parseCampaign({...old,schemaVersion:6});expect(migrated.ruleset.stats).toEqual([]);expect(migrated.schemaVersion).toBe(17);
+ const {ruleset,...old}=c;const migrated=parseCampaign({...old,schemaVersion:6});expect(migrated.ruleset.stats).toEqual([]);expect(migrated.schemaVersion).toBe(18);
  const other=createCampaign('Другая');expect(other.ruleset.id).not.toBe(c.ruleset.id);expect(other.ruleset.stats.some(stat=>stat.key==='hp_max')).toBe(true);
 });

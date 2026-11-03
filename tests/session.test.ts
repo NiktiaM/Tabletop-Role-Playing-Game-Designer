@@ -1,5 +1,6 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {test,expect} from 'vitest';
-import {createCampaign,defaultGrid,parseCampaign,type Character,type GameMap,type Token} from '../src/shared/campaign.js';
+import {defaultGrid,parseCampaign,type Character,type GameMap,type Token} from '../src/shared/campaign.js';
 import {startGame,setTacticalMovement} from '../src/domain/session.js';
 import {moveWithPath} from '../src/domain/movement-action.js';
 

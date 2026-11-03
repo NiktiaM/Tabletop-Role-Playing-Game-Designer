@@ -1,5 +1,6 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {test,expect} from 'vitest';
-import {campaignSchema,createCampaign,defaultGrid,parseCampaign,type Character,type GameMap} from '../src/shared/campaign.js';
+import {campaignSchema,defaultGrid,parseCampaign,type Character,type GameMap} from '../src/shared/campaign.js';
 import {createItem} from '../src/domain/items.js';
 import {placeItem,takeItem} from '../src/domain/ground-items.js';
 import {giveInventory} from '../src/domain/inventory.js';
@@ -55,5 +56,5 @@ test('v12 получает пустое размещение без потери
  const c=fixture(),{ground,...item}=c.items[0];
  const migrated=parseCampaign({...c,schemaVersion:12,session:{started:true,tacticalMovement:true},items:[item]});
  expect(migrated.items[0]).toEqual(c.items[0]);expect(migrated.session).toEqual({started:true,tacticalMovement:true});
- expect(migrated.schemaVersion).toBe(17);
+ expect(migrated.schemaVersion).toBe(18);
 });

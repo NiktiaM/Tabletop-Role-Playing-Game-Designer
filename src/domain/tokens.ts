@@ -9,3 +9,4 @@ export function footprintFits(map: {width:number;height:number;grid:Grid}, cell:
 export function footprintsOverlap(a: Cell, aSize: Footprint, b: Cell, bSize: Footprint): boolean {
  return a.column < b.column+bSize.width && a.column+aSize.width>b.column && a.row<b.row+bSize.height && a.row+aSize.height>b.row;
 }
+export function tokenSize(character:{footprint:Footprint},token:{rotation?:0|90}):Footprint {return token.rotation===90?{width:character.footprint.height,height:character.footprint.width}:character.footprint;}

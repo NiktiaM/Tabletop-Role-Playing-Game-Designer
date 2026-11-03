@@ -1,7 +1,8 @@
+import {PrisonSettings} from './PrisonSettings.js';
 import React,{useEffect,useState} from 'react';
 import type {Campaign} from '../shared/campaign.js';
 import {gameplaySchema} from '../shared/gameplay.js';
-export function GameplaySettings({campaign,onChange}:{campaign:Campaign;onChange:(next:Campaign,message:string)=>boolean}){
+function LegacyGameplaySettings({campaign,onChange}:{campaign:Campaign;onChange:(next:Campaign,message:string)=>boolean}){
  const [value,setValue]=useState(campaign.gameplay),[error,setError]=useState('');useEffect(()=>setValue(campaign.gameplay),[campaign.gameplay]);
  return <section className="gameplay-settings"><h2>Настройки игрового цикла</h2><p>Начальные варианты правил для отладки. Броня уже входит в формулу HP R Prison; поглощение включается отдельно и может действовать одновременно. Реакции выбираются перед броском и оплачиваются даже при неудаче/ничьей. Без реакции по умолчанию защита не спасает; ничья в ближнем бою не наносит урон.</p>
  <div className="grid-fields">{([['attackCost','Обычная атака, ОД'],['dodgeCost','Уклонение, ОД'],['blockCost','Блок, ОД'],['counterCost','Контратака, ОД'],['pickupRange','Дистанция подбора, м'],['pickupCost','Подбор, ОД'],['visionMeters','Дальность видимости, м'],['highGroundBonus','Бонус атаки с высоты'],['xpPerLevel','База порогов опыта']] as const).map(([key,label])=><label key={key}>{label}<input aria-label={label} type="number" min="0" value={Number.isNaN(value[key])?'':value[key]} onChange={e=>setValue({...value,[key]:e.target.value.trim()?Number(e.target.value):NaN})}/></label>)}{([['strengthStat','Сила для атаки'],['dexterityStat','Ловкость для атаки/защиты'],['armorStat','Броня для поглощения']] as const).map(([key,label])=><label key={key}>{label}<select value={value[key]} onChange={e=>setValue({...value,[key]:e.target.value})}>{campaign.ruleset.stats.map(s=><option key={s.key} value={s.key}>{s.name}</option>)}</select></label>)}</div>
@@ -12,3 +13,5 @@ export function GameplaySettings({campaign,onChange}:{campaign:Campaign;onChange
  <p className="hint">Порог уровня L = база × (L−1) × L / 2; база 1000 даёт 0/1000/3000/6000… Ручные уровни не понижаются. Смена уровня/экипировки не лечит персонажа. Эффекты тикают и уменьшают длительность в конце хода получателя.</p><button onClick={()=>{const parsed=gameplaySchema.safeParse(value);if(!parsed.success){setError('Проверьте диапазоны: стоимости 0–10000, множитель жидкости 1–10, база опыта 1–1000000; остальные значения должны быть конечными.');return;}if(onChange({...campaign,gameplay:parsed.data},'Настройки игрового цикла применены.'))setError('');}}>Применить настройки игрового цикла</button>{error&&<p role="alert">{error}</p>}
  </section>;
 }
+
+export function GameplaySettings(props:Parameters<typeof LegacyGameplaySettings>[0]){return props.campaign.gameplay.rulesVersion==='prison03'?<PrisonSettings {...props}/>:<LegacyGameplaySettings {...props}/>;}

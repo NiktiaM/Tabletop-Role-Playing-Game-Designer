@@ -44,3 +44,10 @@ body:has(.editor-expanded){overflow:hidden}.editor-expanded>.editor-toolbar{heig
 .initiative-portraits .defeated-turn{opacity:.55;filter:grayscale(1);border-color:#945e66}
 
 .action-error{position:sticky;top:0;z-index:2;background:#512b30;border:1px solid #e4a3a7;padding:12px;border-radius:8px;color:#fff}.gameplay-rules-details{margin:18px 0;padding:12px;border:1px solid #485a74;border-radius:10px}.gameplay-rules-details>summary{cursor:pointer}
+
+/* Prison0.3: compact tools preserve the tabletop while details are closed. */
+.prison-toolbox{border:1px solid #426c59;background:#15251f;margin:8px 0;padding:10px;border-radius:10px}.prison-toolbox>summary{cursor:pointer;font-weight:700}.prison-tools>details{border-top:1px solid #405348;padding:10px 0}.prison-clock,.battle-switcher{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.battle-switcher button[aria-pressed="true"]{outline:2px solid #d5b66b}.ingredient-list{max-height:180px;overflow:auto;display:grid;gap:5px}.fog-overlay{position:absolute;inset:0;pointer-events:none;z-index:20}.prison-tools label{display:block;margin:8px 0}.prison-tools input[type="checkbox"]{width:auto}.battle-actions fieldset{border:1px solid #415346}.prison-tools textarea{width:100%;min-height:60px}
+
+.play-mode>.prison-toolbox{position:absolute;z-index:22;bottom:68px;left:16px;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 230px);overflow:auto;box-shadow:0 8px 30px #0008}.play-mode>.prison-toolbox:not([open]){width:auto}.play-mode .prison-tools .grid-fields{grid-template-columns:1fr}.prison-tools button{margin:4px}
+
+.interception-modal{position:fixed;inset:0;background:#0009;z-index:100;display:grid;place-items:center}.interception-modal>section{background:#182b22;border:1px solid #849b77;border-radius:12px;max-width:520px;padding:24px}.interception-modal button{margin:5px}

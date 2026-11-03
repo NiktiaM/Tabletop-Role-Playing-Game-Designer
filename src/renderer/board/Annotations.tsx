@@ -1,7 +1,7 @@
 import React from 'react';
 import {annotationNames,type Annotation} from '../../shared/annotations.js';
 import type {Camera} from '../../shared/campaign.js';
-const colors={wall:'#ff7474',cover:'#79c5ff',elevation:'#cfa2ff',liquid:'#55d9bd',light:'#ffe681'};
+const colors={wall:'#ff7474',cover:'#79c5ff',elevation:'#cfa2ff',liquid:'#55d9bd',light:'#ffe681',puzzle:'#e8a556'};
 export function Annotations({items,camera,width,height,selected,onSelect,selectMode}: {items:Annotation[];camera:Camera;width:number;height:number;selected:string|null;onSelect:(id:string)=>void;selectMode:boolean}) {
  return <svg className="annotations-overlay" aria-label="Разметка карты" width="100%" height="100%">
  <defs><clipPath id="annotation-map-clip"><rect width={width} height={height}/></clipPath></defs>

@@ -39,7 +39,7 @@ export function Items({campaign,onTemplates,onItems,configure=true}:{campaign:Ca
  </article>)}</div>
  <h2>Инвентарь партии</h2><label>Показать инвентарь<select aria-label="Показать инвентарь" value={filter} onChange={event=>setFilter(event.target.value)}><option value="all">Все экземпляры</option><option value="stash">Общий запас</option>{campaign.characters.map(character=><option key={character.id} value={character.id}>{character.name}</option>)}</select></label>
  <div className="item-instances">{campaign.items.filter(item=>filter==='all'||filter==='stash'&&item.ownerId===null&&!item.ground||item.ownerId===filter).map(item=><Instance configure={configure} key={item.id} item={item} campaign={campaign} onChange={next=>onItems(campaign.items.map(existing=>existing.id===next.id?next:existing))} onDelete={()=>{if(window.confirm(`Удалить экземпляр ${item.template.name}?`))onItems(campaign.items.filter(existing=>existing.id!==item.id));}}/>)}</div>
- <p className="hint">Экипировка пока отмечается вручную и не изменяет HP, броню или урон. Кости оружия хранятся как данные, не бросаются. Нулевой максимум означает, что ресурс не используется. Общий запас хранится внутри этой партии. Чтобы оставить вещь на карте, используйте блок «Предметы на поле».</p>
+ <p className="hint">Экипировка применяется к расчётам; смена оружия в бою доступна в действиях за ОД. Прямые правки здесь — вмешательство мастера. Нулевой максимум означает, что ресурс не используется. Общий запас хранится внутри этой партии. Чтобы оставить вещь на карте, используйте блок «Предметы на поле».</p>
  </section>;
 }
 function Instance({item,campaign,onChange,onDelete,configure}:{item:ItemInstance;campaign:Campaign;onChange:(item:ItemInstance)=>boolean;onDelete:()=>void;configure:boolean}){

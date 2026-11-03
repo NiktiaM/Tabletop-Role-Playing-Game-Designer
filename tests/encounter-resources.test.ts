@@ -1,8 +1,9 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {test,expect} from 'vitest';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {campaignSchema,createCampaign,defaultGrid,parseCampaign,type Character,type Campaign} from '../src/shared/campaign.js';
+import {campaignSchema,defaultGrid,parseCampaign,type Character,type Campaign} from '../src/shared/campaign.js';
 import {rulesetSchema} from '../src/shared/rules.js';
 import {startEncounter,nextTurn,endEncounter,reorderEncounter,currentActor} from '../src/domain/encounter.js';
 import {resourceBudget,setResource} from '../src/domain/resources.js';

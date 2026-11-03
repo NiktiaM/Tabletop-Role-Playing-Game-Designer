@@ -2,11 +2,11 @@ import {terrainAt} from './environment.js';
 import {terrainSchema} from '../shared/gameplay.js';
 import type {GameMap,Character,Token} from '../shared/campaign.js';
 import {cellOrigin,type Point} from './grid.js';
-import {footprintFits,footprintsOverlap,type Cell} from './tokens.js';
-export interface MovementOptions {mode:'meters'|'cells';diagonal:boolean;terrain?:ReturnType<typeof terrainSchema.parse>}
+import {footprintFits,footprintsOverlap,tokenSize,type Cell} from './tokens.js';
+export interface MovementOptions {mode:'meters'|'cells';diagonal:boolean;prison?:boolean;freeHands?:number;terrain?:ReturnType<typeof terrainSchema.parse>}
 const key=(cell:Cell)=>`${cell.column},${cell.row}`;
 const cross=(a:Point,b:Point,c:Point)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
-function hull(points:Point[]):Point[]{
+export function hull(points:Point[]):Point[]{
  const sorted=[...points].sort((a,b)=>a.x-b.x||a.y-b.y),lower:Point[]=[],upper:Point[]=[];
  for(const p of sorted){while(lower.length>=2&&cross(lower[lower.length-2],lower[lower.length-1],p)<=0)lower.pop();lower.push(p);}
  for(const p of [...sorted].reverse()){while(upper.length>=2&&cross(upper[upper.length-2],upper[upper.length-1],p)<=0)upper.pop();upper.push(p);}
@@ -23,18 +23,19 @@ export function wallInsideHull(from:Point,to:Point,polygon:Point[]):boolean{
  }
  return low<high;
 }
-function corners(map:GameMap,cell:Cell,character:Character):Point[]{const p=cellOrigin(cell.column,cell.row,map.grid),w=character.footprint.width*map.grid.cellSizePx,h=character.footprint.height*map.grid.cellSizePx;return [p,{x:p.x+w,y:p.y},{x:p.x+w,y:p.y+h},{x:p.x,y:p.y+h}];}
+function corners(map:GameMap,cell:Cell,character:Character,token:Token):Point[]{const footprint=tokenSize(character,token);const p=cellOrigin(cell.column,cell.row,map.grid),w=footprint.width*map.grid.cellSizePx,h=footprint.height*map.grid.cellSizePx;return [p,{x:p.x+w,y:p.y},{x:p.x+w,y:p.y+h},{x:p.x,y:p.y+h}];}
 export function positionFree(map:GameMap,cell:Cell,character:Character,token:Token,tokens:Token[],characters:Character[]):boolean{
- if(!footprintFits(map,cell,character.footprint))return false;
- return !tokens.some(other=>{if(other.id===token.id||other.mapId!==map.id)return false;const c=characters.find(c=>c.id===other.characterId);return !!c&&footprintsOverlap(cell,character.footprint,other,c.footprint);});
+ if(!footprintFits(map,cell,tokenSize(character,token)))return false;
+ return !tokens.some(other=>{if(other.id===token.id||other.mapId!==map.id)return false;const c=characters.find(c=>c.id===other.characterId);return !!c&&footprintsOverlap(cell,tokenSize(character,token),other,tokenSize(c,other));});
 }
-export function stepAllowed(map:GameMap,from:Cell,to:Cell,character:Character,token:Token,tokens:Token[],characters:Character[]):boolean{
+export function stepAllowed(map:GameMap,from:Cell,to:Cell,character:Character,token:Token,tokens:Token[],characters:Character[],blockCovers=false):boolean{
  const dx=to.column-from.column,dy=to.row-from.row;if(Math.abs(dx)>1||Math.abs(dy)>1||(!dx&&!dy))return false;
  if(!positionFree(map,to,character,token,tokens,characters))return false;
  if(dx&&dy){const sideA={column:from.column+dx,row:from.row},sideB={column:from.column,row:from.row+dy};if(!positionFree(map,sideA,character,token,tokens,characters)||!positionFree(map,sideB,character,token,tokens,characters))return false;}
- const swept=hull([...corners(map,from,character),...corners(map,to,character)]);
+ const swept=hull([...corners(map,from,character,token),...corners(map,to,character,token)]);
  const left=Math.min(...swept.map(p=>p.x)),right=Math.max(...swept.map(p=>p.x)),top=Math.min(...swept.map(p=>p.y)),bottom=Math.max(...swept.map(p=>p.y));
- return !map.annotations.some(item=>item.kind==='wall'&&Math.max(item.from.x,item.to.x)>left&&Math.min(item.from.x,item.to.x)<right&&Math.max(item.from.y,item.to.y)>=top&&Math.min(item.from.y,item.to.y)<=bottom&&wallInsideHull(item.from,item.to,swept));
+ if(blockCovers&&map.annotations.some(item=>item.kind==='cover'&&item.blocking!==false&&item.hp!==0&&Math.min(item.from.x,item.to.x)<right&&Math.max(item.from.x,item.to.x)>left&&Math.min(item.from.y,item.to.y)<bottom&&Math.max(item.from.y,item.to.y)>top))return false;
+ return !map.annotations.some(item=>item.kind==='wall'&&!item.open&&Math.max(item.from.x,item.to.x)>left&&Math.min(item.from.x,item.to.x)<right&&Math.max(item.from.y,item.to.y)>=top&&Math.min(item.from.y,item.to.y)<=bottom&&wallInsideHull(item.from,item.to,swept));
 }
 class Heap {
  data:{cell:Cell;cost:number}[]=[];
@@ -47,10 +48,12 @@ export function reachable(map:GameMap,token:Token,characters:Character[],tokens:
  const character=characters.find(c=>c.id===token.characterId);if(!character)throw new Error('Персонаж не найден');
  const cells:Reachable['cells']=new Map([[key(token),{cell:{column:token.column,row:token.row},cost:0,previous:null}]]),heap=new Heap();heap.push({cell:token,cost:0});
  const directions=[[1,0],[-1,0],[0,1],[0,-1],...(options.diagonal?[[1,1],[1,-1],[-1,1],[-1,-1]]:[])];let limited=false;
- const terrainCache=new Map<string,ReturnType<typeof terrainAt>>();const sample=(cell:Cell)=>{const id=key(cell),cached=terrainCache.get(id);if(cached)return cached;const value=terrainAt(map,cell,character.footprint);terrainCache.set(id,value);return value;};
+ const terrainCache=new Map<string,ReturnType<typeof terrainAt>>();const sample=(cell:Cell)=>{const id=key(cell),cached=terrainCache.get(id);if(cached)return cached;const value=terrainAt(map,cell,tokenSize(character,token));terrainCache.set(id,value);return value;};
  while(heap.data.length){const current=heap.pop();if(current.cost>cells.get(key(current.cell))!.cost+1e-9)continue;
-  for(const [dx,dy] of directions){const cell={column:current.cell.column+dx,row:current.cell.row+dy};const terrain=options.terrain,fromTerrain=terrain?sample(current.cell):null,toTerrain=terrain?sample(cell):null;const cost=current.cost+(options.mode==='cells'?1:map.grid.metersPerCell*(dx&&dy?Math.SQRT2:1))*(toTerrain?.liquid?terrain!.liquidMultiplier:1)+(terrain?Math.max(0,toTerrain!.height-fromTerrain!.height)*terrain.climbCost:0);if(cost>budget+1e-9)continue;const old=cells.get(key(cell));if(old&&old.cost<=cost+1e-9)continue;if(!stepAllowed(map,current.cell,cell,character,token,tokens,characters))continue;if(!old&&cells.size>=maxCells){limited=true;continue;}cells.set(key(cell),{cell,cost,previous:key(current.cell)});heap.push({cell,cost});}
+  for(const [dx,dy] of directions){const cell={column:current.cell.column+dx,row:current.cell.row+dy};const terrain=options.terrain,fromTerrain=terrain?sample(current.cell):null,toTerrain=terrain?sample(cell):null;const horizontal=options.mode==='cells'?1:map.grid.metersPerCell*(dx&&dy?Math.SQRT2:1),height=terrain?Math.abs(toTerrain!.height-fromTerrain!.height):0,travel=toTerrain?.travel??fromTerrain?.travel;const step=options.prison?(travel==='stairs'?Math.hypot(horizontal,height):horizontal+height*(travel==='ladder'?1:2))*(toTerrain?.rough||toTerrain?.liquid?2:1):horizontal*(toTerrain?.liquid?terrain!.liquidMultiplier:1)+(terrain?Math.max(0,toTerrain!.height-fromTerrain!.height)*terrain.climbCost:0);const cost=current.cost+step;if(options.prison&&height>.5&&(options.freeHands??2)<(travel==='stairs'?0:travel==='ladder'?1:2))continue;if(cost>budget+1e-9)continue;const old=cells.get(key(cell));if(old&&old.cost<=cost+1e-9)continue;if(!stepAllowed(map,current.cell,cell,character,token,tokens,characters,options.prison))continue;if(!old&&cells.size>=maxCells){limited=true;continue;}cells.set(key(cell),{cell,cost,previous:key(current.cell)});heap.push({cell,cost});}
  }
  return {cells,limited};
 }
 export function route(result:Reachable,to:Cell):Cell[]{let entry=result.cells.get(key(to));if(!entry)return [];const path:Cell[]=[];while(entry){path.push(entry.cell);entry=entry.previous?result.cells.get(entry.previous):undefined;}return path.reverse();}
+
+export function polygonsOverlap(a:Point[],b:Point[]):boolean {for(const polygon of [a,b])for(let i=0;i<polygon.length;i++){const p=polygon[i],q=polygon[(i+1)%polygon.length],nx=q.y-p.y,ny=p.x-q.x,pa=a.map(t=>t.x*nx+t.y*ny),pb=b.map(t=>t.x*nx+t.y*ny);if(Math.max(...pa)<=Math.min(...pb)+1e-7||Math.max(...pb)<=Math.min(...pa)+1e-7)return false;}return true;}

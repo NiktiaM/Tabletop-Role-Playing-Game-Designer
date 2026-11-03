@@ -1,0 +1,36 @@
+import {itemTemplateSchema,type ItemTemplate} from '../shared/items.js';
+import type {Mechanics} from '../shared/mechanics.js';
+export const catalogId=(n:number)=>`03000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+function template(n:number,name:string,category:ItemTemplate['category'],description:string,mechanics:Partial<Mechanics>,damageDice:string|null=null,maxCharges=0):ItemTemplate {return itemTemplateSchema.parse({id:catalogId(n),name,category,description,revision:1,damageDice,maxDurability:0,maxCharges,mechanics});}
+export function prisonCatalog():ItemTemplate[]{return [
+ template(1,'Лёгкое дробящее','weapon','Небольшой пригодный предмет.',{apCost:2,rangeMeters:1.5,hands:'one',size:'small',weight:.4,materialTag:'lightClub'},'1d4'),
+ template(2,'Дубинка / обычное дробящее','weapon','Подходит для оглушающего удара.',{apCost:2,rangeMeters:1.5,hands:'one',size:'large',weight:.8,stunCapable:true,materialTag:'club'},'1d6'),
+ template(3,'Заточка','weapon','Режущее свойство: кровь при нанесённом уроне и перевесе 5+.',{apCost:2,rangeMeters:1.5,hands:'one',size:'small',weight:.2,bleeding:true,materialTag:'shiv'},'1d6'),
+ template(4,'Бритва','weapon','Режущее свойство.',{apCost:2,rangeMeters:1.5,hands:'one',size:'small',weight:.1,bleeding:true},'1d4'),
+ template(5,'Тяжёлая труба','weapon','Крупная, две руки.',{apCost:3,rangeMeters:1.5,hands:'two',size:'large',weight:3,stunCapable:true},'1d8'),
+ template(6,'Револьвер .38','weapon','Игровой профиль S&W Model 10 / Colt Detective Special.',{attackType:'ranged',apCost:2,rangeMeters:60,normalRange:20,hands:'one',caliber:'.38',size:'small',weight:.9},'1d10',6),
+ template(7,'Пистолет Colt Government .45','weapon','Магазин 7, профиль 20/60 м.',{attackType:'ranged',apCost:2,rangeMeters:60,normalRange:20,hands:'one',caliber:'.45',size:'small',weight:1.1},'1d10',7),
+ template(8,'Дробовик Remington 870','weapon','Одна цель за атаку, две руки, вместимость 4.',{attackType:'ranged',apCost:3,rangeMeters:30,normalRange:10,hands:'two',caliber:'12g',size:'large',weight:3.5},'2d6',4),
+ template(9,'Бинт / готовая повязка','consumable','Остановить кровь и стабилизировать, без HP.',{apCost:3,treatment:'bandage',materialTag:'bandage',size:'small',weight:.05},null,1),
+ template(10,'Импровизированная аптечка','consumable','Остановка крови, стабилизация, +4 HP при HP>0.',{apCost:3,treatment:'improvised',materialTag:'kit',size:'small',weight:.2},null,1),
+ template(11,'Аптечка','consumable','Остановка крови, стабилизация, +8 HP при HP>0.',{apCost:3,treatment:'kit',size:'small',weight:.6},null,1),
+ template(12,'Порция еды','consumable','+2 HP один раз между полноценными снами, не при крови.',{apCost:3,treatment:'food',size:'small',weight:.3},null,1),
+ template(13,'Самодельный мешок','other','Четыре дополнительные мелкие ячейки, до 5 кг внутри.',{materialTag:'bag',size:'small',weight:.2}),
+ template(14,'Петля для переноски','other','Закрепляет вещь, не повышает силу.',{materialTag:'carry',size:'small',weight:.1}),
+ template(15,'Схема маршрута','other','Только известные персонажу сведения.',{materialTag:'map',size:'flat',weight:.01}),
+ template(16,'Подогнанная рабочая одежда','other','Открывает правдоподобную попытку маскировки, без автоуспеха.',{materialTag:'disguise',size:'large',weight:1}),
+ template(17,'Средство для простого замка','other','Открывает попытку для совместимого механизма.',{materialTag:'locktool',size:'small',weight:.1}),
+ template(18,'Короткая лестница','other','До 2 м, пригодность опоры подтверждает мастер, крупная.',{materialTag:'ladder',size:'large',weight:5,hands:'two'}),
+ template(19,'Лом','other','Для объекта:1d6+бонус силы,3 ОД, коэффициент 1.',{apCost:3,rangeMeters:1.5,toolFactor:1,hands:'one',materialTag:'tool',weight:2,size:'large'},'1d6'),
+ template(20,'Кувалда','other','Профиль разрушения 2d6+сила,4 ОД, коэффициент 2; не автоматический боевой профиль.',{apCost:4,rangeMeters:1.5,toolFactor:2,hands:'two',materialTag:'tool',weight:4,size:'large'},'2d6'),
+ ...(['cloth','strap','wood','metal','wire','medical','paper','pencil','rail','rung','fastener','clothes'] as const).map((tag,i)=>template(30+i,{'cloth':'Пригодная ткань','strap':'Прочный шнур / ремень','wood':'Прочная деревянная заготовка','metal':'Металлическая заготовка','wire':'Подходящая проволока','medical':'Готовая медицинская порция','paper':'Бумага','pencil':'Карандаш','rail':'Боковина лестницы','rung':'Готовая перекладина','fastener':'Порция крепежа','clothes':'Рабочая одежда'}[tag],'other','Один конкретный компонент или пригодная порция.',{materialTag:tag,size:['rail','rung','clothes','wood'].includes(tag)?'large':'small',weight:['rail','rung'].includes(tag)?1:.1})),
+ template(50,'Патроны .38','other','Шесть подходящих патронов.',{materialTag:'ammo',caliber:'.38',size:'small',weight:.1},null,6),
+ template(51,'Патроны .45','other','Семь подходящих патронов.',{materialTag:'ammo',caliber:'.45',size:'small',weight:.15},null,7),
+ template(52,'Патроны 12 калибра','other','Четыре подходящих патрона.',{materialTag:'ammo',caliber:'12g',size:'small',weight:.2},null,4),
+ template(53,'Защитный жилет','armor','Броня 2, не складывается с естественной.',{armorValue:2,weight:3,size:'large'}),
+ template(54,'Усиленный жилет','armor','Броня 3, не складывается с другой.',{armorValue:3,weight:4,size:'large'}),
+ template(55,'Сигареты','other','Обмен по интересам NPC.',{materialTag:'trade',size:'small',weight:.05}),
+ template(56,'Аудиокассета','other','Музыка, запись или предмет обмена.',{size:'small',weight:.05}),
+ template(57,'Служебный ключ','other','Подходит только к конкретному замку.',{size:'small',weight:.05}),
+ template(58,'Фонарь','other','Базовая область света 6 м; запас задаёт мастер.',{rangeMeters:6,materialTag:'flashlight',size:'small',weight:.5}),
+ ];}

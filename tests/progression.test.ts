@@ -1,5 +1,6 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
-import {createCampaign,parseCampaign,type Character} from '../src/shared/campaign.js';
+import {parseCampaign,type Character} from '../src/shared/campaign.js';
 import {emptyRuleset,rulesetSchema} from '../src/shared/rules.js';
 import {characterLevel,npcExperience} from '../src/domain/progression.js';
 import {mergeContent} from '../src/domain/content.js';

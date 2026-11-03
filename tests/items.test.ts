@@ -1,7 +1,8 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
 import {createItem,transferItem} from '../src/domain/items.js';
 import {itemTemplateSchema,itemInstanceSchema,type ItemTemplate} from '../src/shared/items.js';
-import {createCampaign,campaignSchema,parseCampaign} from '../src/shared/campaign.js';
+import {campaignSchema,parseCampaign} from '../src/shared/campaign.js';
 const template:ItemTemplate={image:null,id:crypto.randomUUID(),revision:1,name:'Меч',category:'weapon',description:'Тест',damageDice:'1d6',maxDurability:100,maxCharges:3};
 test('экземпляры независимы, изменение шаблона не меняет старый снимок',()=>{
  const source=structuredClone(template);const a=createItem(source,null),b=createItem(source,null);

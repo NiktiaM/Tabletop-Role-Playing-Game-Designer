@@ -1,3 +1,6 @@
+import {carrySummary} from '../domain/prison-inventory.js';
+import {condition} from '../domain/prison-state.js';
+import {BACKGROUNDS} from '../domain/prison-progression.js';
 import {CharacterValues} from './CharacterValues.js';
 import {effectiveStats} from '../domain/effective-stats.js';
 import {LevelSummary} from './LevelSummary.js';
@@ -26,6 +29,7 @@ export function CharacterCard({campaign,character,onResource,onClose,onValues,on
  {campaign.ruleset.movement.budgetStat?<ResourceControl key={`ap-${character.id}`} campaign={campaign} character={character} statKey={campaign.ruleset.movement.budgetStat} name="ОД" onChange={onResource}/>:<p>Показатель ОД не настроен в правилах.</p>}
  <p className="hint">Ресурсы общие для всех токенов персонажа; 0 HP не удаляет персонажа; пропуск хода задаётся настройкой боя.</p>
 
+ {campaign.gameplay.rulesVersion==='prison03'&&<><h4>Профиль и состояния</h4><p>{BACKGROUNDS.find(b=>b.id===character.prisonProfile?.background)?.name??'Предыстория не назначена'}</p><p>Навыки: {character.prisonProfile?.skills.join(', ')||'не назначены'}</p><p>{condition(campaign,character.id).bleeding?'Кровотечение · ':''}{condition(campaign,character.id).stunned?'Оглушён · ':''}{condition(campaign,character.id).grappledBy?'В захвате':''}</p>{(()=>{try{const v=carrySummary(campaign,character.id);return <p>Переноска: {v.weight.toFixed(1)}/{v.limit}кг; мелочи {v.slots}/{v.capacity}; руки {v.hands}/2{v.valid?'':' · превышены возможности переноски'}</p>;}catch{return null;}})()}</>}
  <h4>Инвентарь ({items.length})</h4>{items.map(item=><article key={item.id}>{item.template.image&&<img className="item-photo" src={item.template.image} alt=""/>}<strong>{item.template.name}</strong><p>Прочность {item.durability}/{item.template.maxDurability} · заряды {item.charges}/{item.template.maxCharges}{item.equipped?' · экипирован':''}</p></article>)}{!items.length&&<p>Инвентарь пуст.</p>}
  <h4>Способности ({abilities.length})</h4>{abilities.map(ability=><article key={ability.id}><strong>{ability.definition.name}</strong><p>{ability.definition.description}</p><p>{ability.definition.costText||'Стоимость не указана'} · {ability.definition.maxUses?`${ability.usesRemaining}/${ability.definition.maxUses}`:'без лимита'}</p></article>)}{!abilities.length&&<p>Нет назначенных способностей.</p>}
  <p className="hint">Для выдачи и передачи вещей откройте «Инвентари»; ручные счётчики находятся во вкладке «Способности». Применение атак, способностей и вещей доступно в «Действиях».</p>

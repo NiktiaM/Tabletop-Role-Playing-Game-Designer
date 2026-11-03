@@ -1,7 +1,8 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {test,expect} from 'vitest';
 import {rollDice} from '../src/domain/dice.js';
 import {startAutomaticEncounter} from '../src/domain/initiative.js';
-import {createCampaign,parseCampaign,type Character} from '../src/shared/campaign.js';
+import {parseCampaign,type Character} from '../src/shared/campaign.js';
 import {nextTurn} from '../src/domain/encounter.js';
 import {diceRollSchema} from '../src/shared/dice.js';
 import {annotationSchema} from '../src/shared/annotations.js';

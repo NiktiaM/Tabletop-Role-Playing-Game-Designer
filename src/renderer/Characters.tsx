@@ -1,3 +1,5 @@
+import {createPrisonCharacter,BACKGROUNDS} from '../domain/prison-progression.js';
+import {skillIds,backgroundIds} from '../shared/prison.js';
 import React, { useEffect, useState } from 'react';
 import {LevelSummary} from './LevelSummary.js';
 import {movementBudget} from '../domain/movement-action.js';
@@ -6,6 +8,7 @@ import {evaluateStats} from '../domain/rules/evaluate.js';
 import {CharacterValues} from './CharacterValues.js';
 import { characterSchema, type Campaign, type Character } from '../shared/campaign.js';
 export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValues,configure=true,onRemoveTokens,onAddStats}: {campaign:Campaign;onCreate:(character:Character)=>void;onDelete:(id:string)=>void;onPlace:(id:string)=>void;onMessage:(message:string)=>void;onValues:(id:string,values:Record<string,number>)=>boolean;configure?:boolean;onAddStats?:()=>void;onRemoveTokens?:(id:string)=>void}) {
+ const [background,setBackground]=useState<typeof backgroundIds[number]>('gap'),[skill,setSkill]=useState<typeof skillIds[number]>('Наблюдательность');
  const [creationValues,setCreationValues]=useState<Record<string,string>>({});
  useEffect(()=>setCreationValues(Object.fromEntries(campaign.ruleset.stats.filter(stat=>stat.kind==='base').map(stat=>[stat.key,String(stat.kind==='base'?stat.defaultValue:0)]))),[campaign.ruleset.id,campaign.ruleset.revision]);
  const [level,setLevel]=useState('1');
@@ -18,7 +21,9 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  return <section className="characters">
  <h2>Персонажи и NPC</h2>{configure&&onAddStats&&<button type="button" onClick={onAddStats}>Добавить характеристики R Prison</button>}
  {configure&&<form noValidate onSubmit={event=>{
-  event.preventDefault();const values=Object.fromEntries(Object.entries(creationValues).map(([key,value])=>[key,value.trim()?Number(value):NaN]));let effectiveLevel=Number(level);try{if(derivedLevel)effectiveLevel=evaluateStats(campaign.ruleset,values).find(stat=>stat.key==='level')!.value;}catch{setError('Не удалось рассчитать уровень по правилам');return;}if(!Number.isInteger(effectiveLevel)||effectiveLevel<1||effectiveLevel>1000){setError('Уровень — целое число от 1 до 1000');return;}if(!derivedLevel)values.level=effectiveLevel;const parsed=characterSchema.safeParse({id:crypto.randomUUID(),name,kind,footprint:{width:Number(width),height:Number(height)},portrait,values});
+  event.preventDefault();const values=Object.fromEntries(Object.entries(creationValues).map(([key,value])=>[key,value.trim()?Number(value):NaN]));let effectiveLevel=Number(level);try{if(derivedLevel)effectiveLevel=evaluateStats(campaign.ruleset,values).find(stat=>stat.key==='level')!.value;}catch{setError('Не удалось рассчитать уровень по правилам');return;}if(!Number.isInteger(effectiveLevel)||effectiveLevel<1||effectiveLevel>1000){setError('Уровень — целое число от 1 до 1000');return;}if(!derivedLevel)values.level=effectiveLevel;let raw:unknown={id:crypto.randomUUID(),name,kind,footprint:{width:Number(width),height:Number(height)},portrait,values};
+  if(campaign.gameplay.rulesVersion==='prison03'&&kind==='character'){try{raw=createPrisonCharacter({name,values,background,skill,footprint:{width:Number(width),height:Number(height)},portrait});}catch(e){setError(e instanceof Error?e.message:'Проверьте создание');return;}}
+  const parsed=characterSchema.safeParse(raw);
   if(!parsed.success){setError('Введите имя (1–120 символов) и целую ширину/высоту от 1 до 10 клеток и числовые характеристики.');return;}
   if(campaign.characters.length>=200){setError('Предел — 200 персонажей в партии.');return;}
   onCreate(parsed.data);setName('');setPortrait(null);setError('');
@@ -30,6 +35,7 @@ export function Characters({campaign,onCreate,onDelete,onPlace,onMessage,onValue
  <label>Ширина, клеток<input type="number" min="1" max="10" step="1" value={width} onChange={event=>setWidth(event.target.value)} /></label>
  <label>Высота, клеток<input type="number" min="1" max="10" step="1" value={height} onChange={event=>setHeight(event.target.value)} /></label>
  </div>
+ {campaign.gameplay.rulesVersion==='prison03'&&kind==='character'&&<><p>Распределите20 очков до бонуса. Стартовый уровень1, предыстория добавит2 очка; итоговый максимум15.</p><label>Предыстория<select value={background} onChange={e=>setBackground(e.target.value as typeof background)}>{BACKGROUNDS.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><p>{BACKGROUNDS.find(b=>b.id===background)?.feature}</p><label>Стартовый навык<select value={skill} onChange={e=>setSkill(e.target.value as typeof skill)}>{skillIds.map(s=><option key={s}>{s}</option>)}</select></label></>}
  <h3>Исходные характеристики</h3>
  <div className="grid-fields">{campaign.ruleset.stats.filter(stat=>stat.kind==='base'&&stat.key!=='level').map(stat=><label key={stat.key}>Создание: {stat.name}<input type="number" step="any" value={creationValues[stat.key]??''} onChange={event=>setCreationValues({...creationValues,[stat.key]:event.target.value})}/></label>)}</div>
  {campaign.ruleset.stats.length===0&&<p className="hint">В партии пока нет характеристик. Откройте «Правила» и нажмите «Использовать R Prison — черновик».</p>}

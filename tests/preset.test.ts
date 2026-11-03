@@ -1,5 +1,5 @@
 import {expect,test} from 'vitest';
-import {rPrisonDraft,rPrisonExamples} from '../src/domain/presets/rprison.js';
+import {rPrisonLegacyDraft as rPrisonDraft,rPrisonLegacyExamples as rPrisonExamples} from '../src/domain/presets/rprison.js';
 import {evaluateStats} from '../src/domain/rules/evaluate.js';
 import {parseFormula,evaluateFormula} from '../src/domain/rules/formula.js';
 import {rulesetSchema} from '../src/shared/rules.js';

@@ -1,8 +1,9 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {readFile} from 'node:fs/promises';
 import {contentSchema} from '../src/shared/content.js';
 import {mergeContent} from '../src/domain/content.js';
 import {test,expect} from 'vitest';
-import {createCampaign,campaignSchema,parseCampaign,defaultGrid,type Campaign,type Character} from '../src/shared/campaign.js';
+import {campaignSchema,parseCampaign,defaultGrid,type Campaign,type Character} from '../src/shared/campaign.js';
 import {createItem} from '../src/domain/items.js';
 import {defaultMechanics} from '../src/shared/mechanics.js';
 import {startEncounter,nextTurn,endEncounter} from '../src/domain/encounter.js';

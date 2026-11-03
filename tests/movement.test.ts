@@ -1,5 +1,6 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {test,expect} from 'vitest';
-import {createCampaign,defaultGrid,type GameMap,type Character,type Token} from '../src/shared/campaign.js';
+import {defaultGrid,type GameMap,type Character,type Token} from '../src/shared/campaign.js';
 import {reachable,route,stepAllowed} from '../src/domain/movement.js';
 import {moveWithPath,movementBudget} from '../src/domain/movement-action.js';
 const character:Character={id:crypto.randomUUID(),name:'Герой',kind:'character',portrait:null,footprint:{width:1,height:1},values:{},resources:{}};

@@ -1,6 +1,7 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
 import {annotationSchema} from '../src/shared/annotations.js';
-import {mapSchema,defaultGrid,createCampaign,parseCampaign} from '../src/shared/campaign.js';
+import {mapSchema,defaultGrid,parseCampaign} from '../src/shared/campaign.js';
 const base={id:crypto.randomUUID(),name:'Разметка',visible:true};
 const wall={...base,kind:'wall' as const,from:{x:10,y:20},to:{x:90,y:70},destructible:true,hp:10};
 const map={id:crypto.randomUUID(),name:'Карта',width:100,height:100,grid:defaultGrid(),image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',annotations:[wall]};

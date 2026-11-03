@@ -1,6 +1,7 @@
+import {legacyCampaign as createCampaign} from './legacy-fixture.js';
 import {expect,test} from 'vitest';
 import {footprintFits,footprintsOverlap} from '../src/domain/tokens.js';
-import {campaignSchema,createCampaign,defaultGrid} from '../src/shared/campaign.js';
+import {campaignSchema,defaultGrid} from '../src/shared/campaign.js';
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 test('занимаемая область учитывает все клетки и неполные края карты',()=>{
  const map={width:500,height:400,grid:{...defaultGrid(),cellSizePx:50,originPx:{x:10,y:-10}}};
