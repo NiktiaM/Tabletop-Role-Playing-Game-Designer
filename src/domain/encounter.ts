@@ -52,7 +52,7 @@ export function reorderEncounter(campaign:Campaign,ids:string[]):Campaign {
 
 export function endEncounter(campaign:Campaign):Campaign {
  if(!campaign.encounter)throw new Error('Бой не начат');
- if(isPrison(campaign)){const id=campaign.encounter.id;let next:Campaign={...campaign,encounter:campaign.otherEncounters[0]??null,otherEncounters:campaign.otherEncounters.slice(1),pendingAttack:null,effects:campaign.effects.filter(e=>e.encounterId!==id),session:{...campaign.session,tacticalMovement:campaign.otherEncounters.length>0?true:campaign.encounter.previousTacticalMovement}};for(const p of campaign.encounter.participants)next=setCondition(next,p.characterId,{stunned:false,grappledBy:null});return campaignSchema.parse(preserveResources(campaign,notice(next,'Бой завершён; HP, ОД, кровь и вещи сохранены.')));}
+ if(isPrison(campaign)){const id=campaign.encounter.id;let next:Campaign={...campaign,encounter:campaign.otherEncounters[0]??null,otherEncounters:campaign.otherEncounters.slice(1),pendingAttack:null,effects:campaign.effects.filter(e=>e.encounterId!==id),session:{...campaign.session,tacticalMovement:campaign.otherEncounters.length>0}};for(const p of campaign.encounter.participants)next=setCondition(next,p.characterId,{stunned:false,grappledBy:null});return campaignSchema.parse(preserveResources(campaign,notice(next,'Бой завершён; HP, ОД, кровь и вещи сохранены.')));}
  return campaignSchema.parse(preserveResources(campaign,{...campaign,pendingAttack:null,effects:campaign.effects.filter(e=>e.encounterId!==campaign.encounter!.id),encounter:null,session:{...campaign.session,tacticalMovement:campaign.encounter.previousTacticalMovement}}));
 }
 

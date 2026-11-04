@@ -1,3 +1,4 @@
+import {PlayStatus} from './PlayStatus.js';
 import {maneuver} from '../domain/prison-actions.js';
 import {combatStamp} from '../domain/prison-combat.js';
 import {rotateToken,movementInterceptors} from '../domain/prison-movement.js';
@@ -18,7 +19,7 @@ import {placeItem,takeItem} from '../domain/ground-items.js';
 import {setResource} from '../domain/resources.js';
 import {DiceTray} from './DiceTray.js';
 import {Encounter} from './Encounter.js';
-import {startGame,setTacticalMovement} from '../domain/session.js';
+import {startGame} from '../domain/session.js';
 import {moveWithPath,movementBudget} from '../domain/movement-action.js';
 import {Abilities} from './Abilities.js';
 import {CharacterTransfer} from './CharacterTransfer.js';
@@ -39,6 +40,7 @@ function App() {
   const [leftPanel,setLeftPanel]=useState<'characters'|'battle'|null>(null),[rightPanel,setRightPanel]=useState<'items'|'inventory'|'abilities'|'actions'|null>(null);
   const [fullScreen,setFullScreen]=useState(false);
   useEffect(()=>{const update=()=>setFullScreen(!!document.fullscreenElement);document.addEventListener('fullscreenchange',update);return()=>document.removeEventListener('fullscreenchange',update);},[]);
+  const [actionTargetId,setActionTargetId]=useState<string|null>(null);
   const [inspectedId,setInspectedId]=useState<string|null>(null);
   const [screen,setScreen]=useState<'configure'|'play'>('configure');
   const [tab,setTab]=useState<'maps'|'characters'|'rules'|'items'|'inventory'|'abilities'|'battle'|'actions'>('maps');
@@ -55,6 +57,7 @@ function App() {
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
   }, [dirty]);
+  useEffect(()=>{const close=(e:KeyboardEvent)=>{if(e.key!=='Escape'||document.querySelector('dialog[open]'))return;setInspectedId(null);setLeftPanel(null);setRightPanel(null);setPlacementId(null);setInterception(null);};document.addEventListener('keydown',close);return()=>document.removeEventListener('keydown',close);},[]);
   const canReplace = () => !dirty || window.confirm('Есть несохранённые изменения. Продолжить без сохранения?');
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -75,7 +78,7 @@ function App() {
   }
   function showMap(){setTab('maps');setLeftPanel(null);setRightPanel(null);}
   function chooseTab(next:'maps'|'characters'|'rules'|'items'|'inventory'|'abilities'|'battle'|'actions') {
-    setPlacementId(null);
+    setPlacementId(null);if(next!=='maps')setInspectedId(null);
     if(screen==='configure'){setTab(next);return;}
     if(next==='maps'){showMap();return;}
     if(next==='characters'||next==='battle'){setLeftPanel(leftPanel===next?null:next);if(next==='characters'||rightPanel==='items'||rightPanel==='inventory'||rightPanel==='abilities'||window.innerWidth<850)setRightPanel(null);}
@@ -119,7 +122,7 @@ function App() {
     try{
       const token=campaign.tokens.find(t=>t.id===id);if(!token)return;
       const seeded=campaign.gameplay.rulesVersion==='prison03'?rememberVision(campaign,token.characterId,token.mapId):campaign;
-      const moved=moveWithPath(seeded,id,column,row,campaign.session.tacticalMovement);
+      const moved=moveWithPath(seeded,id,column,row,false);
       if(campaign.gameplay.rulesVersion==='prison03'&&!ignoreInterceptions){const potential=movementInterceptors(seeded,id,moved.path);if(potential){setInterception({base:seeded,tokenId:id,column,row,ids:potential.ids,stop:potential.stop,stamp:combatStamp(campaign)});return;}}
       const next=campaign.gameplay.rulesVersion==='prison03'?rememberVision(moved.campaign,token.characterId,token.mapId):moved.campaign;
       if(moved.cost&&commit(next,`Движение: ${Number(moved.cost.toFixed(3))} единиц пути; ОД по режиму участника.`))setUndoMove(campaign);
@@ -148,17 +151,18 @@ function App() {
     <div className="workspace-actions"><button className="secondary" disabled={busy} onClick={leaveParty}>К выбору партии</button><button className="secondary" disabled={busy} onClick={()=>void openParty()}>Открыть партию…</button>
 <button disabled={busy || !campaign} onClick={() => void run(async () => { if (!campaign) return; const r = await window.campaigns.save(campaign); if (!r.ok) { setMessage(r.error); return; } if (r.value) { setCampaign(r.value.campaign); setDirty(false); setMessage(`Сохранено: ${r.value.fileName}`); } })}>Сохранить как…</button></div></section>
     <section className="session-bar" aria-label="Режим приложения"><strong>{screen==='configure'?'Подготовка · Конфигуратор':'Проведение игры'}</strong>
-    {screen==='configure'?<><button disabled={busy||!campaign.maps.length} onClick={openGame}>{campaign.session.started?'Вернуться в игру':'Начать игру'}</button>{!campaign.maps.length&&<span>Добавьте поле, чтобы начать игру.</span>}</>:<><button disabled={busy} onClick={openConfigurator}>Открыть конфигуратор</button><label className="grid-toggle"><input type="checkbox" checked={campaign.session.tacticalMovement} disabled={busy||!!campaign.encounter} onChange={event=>commit(setTacticalMovement(campaign,event.target.checked),'Режим движения изменён без сброса ОД.')}/>Тактическое движение (расход ОД)</label><span>{campaign.session.tacticalMovement?'Расход ОД включён.':'Свободная игра: путь проверяется, ОД не расходуются.'}</span><button onClick={()=>{void (document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>setMessage('Не удалось переключить полный экран.'));}}>{fullScreen?'Выйти из полного экрана':'На весь экран'}</button><button disabled={!undoAction&&!undoMove} onClick={undoLast}>Отменить последнее действие</button><DiceTray key={`${campaign.id}-${loadEpoch}`} campaign={campaign} onChange={commit}/></>}
+    {screen==='configure'?<><button disabled={busy||!campaign.maps.length} onClick={openGame}>{campaign.session.started?'Вернуться в игру':'Начать игру'}</button>{!campaign.maps.length&&<span>Добавьте поле, чтобы начать игру.</span>}</>:<><button aria-label="Открыть конфигуратор" disabled={busy} onClick={openConfigurator}>Подготовка</button><span>{campaign.encounter?'Участники боя расходуют ОД.':'Свободная игра: путь проверяется, ОД не расходуются.'}</span><button onClick={()=>{void (document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()).catch(()=>setMessage('Не удалось переключить полный экран.'));}}>{fullScreen?'Выйти из полного экрана':'На весь экран'}</button><button aria-label="Отменить последнее действие" disabled={!undoAction&&!undoMove} onClick={undoLast}>Отменить</button><DiceTray key={`${campaign.id}-${loadEpoch}`} campaign={campaign} onChange={commit}/><details className="prison-toolbox play-utility"><summary>Часы · проверки · крафт</summary><div className="play-utility-content"><PrisonTools campaign={campaign} onChange={perform}/></div></details></>}
     </section>
-    <details className="prison-toolbox"><summary>Prison0.3 · часы, проверки, мастерская и развитие</summary><PrisonTools campaign={campaign} onChange={perform} configure={screen==='configure'}/></details>
+    {screen==='configure'&&<details className="prison-toolbox"><summary>Prison0.3 · часы, проверки, мастерская и развитие</summary><PrisonTools campaign={campaign} onChange={perform} configure={screen==='configure'}/></details>}
     {screen==='play'&&<div id="panel-battle" role="tabpanel" aria-labelledby="tab-battle" hidden={leftPanel!=='battle'} inert={busy}><Encounter key={campaign.id} campaign={campaign} onChange={(next,message)=>{const accepted=commit(next,message);if(accepted&&!campaign.encounter&&next.encounter)showMap();return accepted;}} onCharacter={id=>{setInspectedId(id);showMap();}}/></div>}
+    {screen==='play'&&<PlayStatus campaign={campaign} setupMode={setupMode} onExitSetup={()=>setSetupMode(false)} onBattle={()=>{setLeftPanel('battle');setRightPanel(null);setInspectedId(null);}} onChange={commit}/>}
     {screen==='play'&&<InitiativeStrip campaign={campaign} onChange={commit} onCharacter={id=>{setInspectedId(id);showMap();}}/>}
     <nav className="workspace-tabs" role="tablist" aria-multiselectable={screen==='play'} aria-label="Разделы партии">
     {([{id:'maps',name:screen==='configure'?'Карты':'Поля'},{id:'characters',name:'Персонажи'},{id:'rules',name:'Правила'},{id:'items',name:'Предметы'},{id:'inventory',name:'Инвентари'},{id:'abilities',name:'Способности'},{id:'battle',name:'Бой'},{id:'actions',name:'Действия'}] as const).filter(item=>screen==='configure'?item.id!=='battle'&&item.id!=='actions':item.id!=='rules').map((item,index,list)=><button key={item.id} id={`tab-${item.id}`} role="tab" aria-selected={screen==='configure'?tab===item.id:(item.id===leftPanel||item.id===rightPanel||item.id==='maps'&&!leftPanel&&!rightPanel)} aria-controls={`panel-${item.id}`} tabIndex={screen==='play'||tab===item.id?0:-1} disabled={busy} onClick={()=>chooseTab(item.id)} onKeyDown={event=>{
       if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();const next=list[(index+(event.key==='ArrowRight'?1:list.length-1))%list.length].id;chooseTab(next);document.getElementById(`tab-${next}`)?.focus();}
     }}>{item.name}</button>)}
     </nav>
-    {screen==='play'&&<div id="panel-actions" role="tabpanel" aria-labelledby="tab-actions" hidden={rightPanel!=='actions'} inert={busy}><BattleActions key={campaign.id} campaign={campaign} onChange={commit} onAction={perform} suggestedTarget={inspectedId}/></div>}
+    {screen==='play'&&<div id="panel-actions" role="tabpanel" aria-labelledby="tab-actions" hidden={rightPanel!=='actions'} inert={busy}><BattleActions key={campaign.id} campaign={campaign} onChange={commit} onAction={perform} suggestedTarget={actionTargetId}/></div>}
     <div id="panel-abilities" role="tabpanel" aria-labelledby="tab-abilities" hidden={screen==='configure'?tab!=='abilities':rightPanel!=='abilities'} inert={busy}><Abilities configure={screen==='configure'} key={campaign.id} campaign={campaign} onTemplates={abilityTemplates=>commit({...campaign,abilityTemplates},'Каталог способностей обновлён.')} onAssigned={abilities=>commit({...campaign,abilities},'Способности обновлены.')} /></div>
     <div id="panel-inventory" role="tabpanel" aria-labelledby="tab-inventory" hidden={screen==='configure'?tab!=='inventory':rightPanel!=='inventory'} inert={busy}><Inventory key={campaign.id} campaign={campaign} onItems={items=>commit({...campaign,items},'Инвентарь обновлён.')} /></div>
     <div id="panel-items" role="tabpanel" aria-labelledby="tab-items" hidden={screen==='configure'?tab!=='items':rightPanel!=='items'} inert={busy}><Items extras={screen==='configure'?<details className="library-extras"><summary>Импорт</summary><div><ContentImport key={campaign.id} campaign={campaign} onImport={next=>commit(next,'Импорт добавлен. Сохраните партию.')} /></div></details>:undefined} configure={screen==='configure'} key={campaign.id} campaign={campaign} onTemplates={itemTemplates=>commit({...campaign,itemTemplates},'Каталог обновлён.')} onItems={items=>commit({...campaign,items},'Инвентарь обновлён.')} /></div>
@@ -175,7 +179,7 @@ function App() {
     <p hidden={screen!=='configure'} className="hint">До 20 карт · PNG/JPG до 15 МБ · Изображения сохраняются внутри файла партии</p>
     {campaign.maps.length > 0 ? <><label htmlFor="map-select">Текущая карта</label><select id="map-select" disabled={busy} value={campaign.view.activeMapId ?? ''} onChange={event => { const id = event.target.value; setCampaign(previous => previous ? { ...previous, view: { ...previous.view, activeMapId: id } } : previous); setDirty(true); }}>
       {campaign.maps.map(map => <option value={map.id} key={map.id}>{map.name}</option>)}
-    </select>{activeMap && <React.Fragment key={`${activeMap.id}-${loadEpoch}`}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board onRotate={id=>{try{perform(rotateToken(campaign,id),'Токен повёрнут.');}catch(e){setMessage(e instanceof Error?e.message:'Поворот отклонён');}}} onAddStats={()=>commit(ensureCoreStats(campaign),'Характеристики добавлены.')} onValues={(id,values)=>commit({...campaign,characters:campaign.characters.map(ch=>ch.id===id?{...ch,values}:ch)},'Характеристики обновлены.')} onActions={id=>{if(id)setInspectedId(id);setRightPanel('actions');}} inspectedId={inspectedId} onInspect={id=>{setInspectedId(id);if(id)showMap();}} onResource={changeResource} onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={campaign.session.tacticalMovement} active={screen==='play'||tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={`${activeMap.id}-${loadEpoch}`} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
+    </select>{activeMap && <React.Fragment key={`${activeMap.id}-${loadEpoch}`}><div hidden={screen!=='configure'}><GridControls width={activeMap.width} height={activeMap.height} grid={activeMap.grid} onGrid={updateGrid} /></div><Board onRotate={id=>{try{perform(rotateToken(campaign,id),'Токен повёрнут.');}catch(e){setMessage(e instanceof Error?e.message:'Поворот отклонён');}}} onAddStats={()=>commit(ensureCoreStats(campaign),'Характеристики добавлены.')} onValues={(id,values)=>commit({...campaign,characters:campaign.characters.map(ch=>ch.id===id?{...ch,values}:ch)},'Характеристики обновлены.')} onActions={id=>{setActionTargetId(id??null);setInspectedId(null);setLeftPanel(null);setRightPanel('actions');}} inspectedId={inspectedId} onInspect={id=>{setInspectedId(id);if(id)showMap();}} onResource={changeResource} onGroundMove={moveGroundItem} onGroundTake={takeGroundItem} configure={screen==='configure'} tactical={!!campaign.encounter} active={screen==='play'||tab==='maps'} setupMode={screen==='configure'||setupMode} onSetupMode={setSetupMode} canUndo={!!undoMove} onUndo={()=>{if(undoMove)commit({...undoMove,view:campaign.view},'Последнее движение отменено.');}} campaign={campaign} onBudget={setBudget} key={`${activeMap.id}-${loadEpoch}`} map={activeMap} camera={campaign.view.cameras[activeMap.id]} onCamera={updateCamera} onGrid={updateGrid} onAnnotations={updateAnnotations} tokens={campaign.tokens} characters={campaign.characters} placementCharacter={placementCharacter} onPlace={placeToken} onCancelPlace={()=>setPlacementId(null)} onMoveToken={moveToken} onRemoveToken={removeToken} /></React.Fragment>}</> : <p>Добавьте первую карту, чтобы открыть игровой стол.</p>}
     </section></>}
     <p role="status" aria-live="polite" className="status">{busy ? 'Выполняется операция…' : message}</p><footer>Подготовка и проведение игры · Данные остаются на вашем компьютере</footer>
   </main>;

@@ -9,7 +9,7 @@ import {UNARMED,reload,aim} from '../src/domain/prison-combat.js';
 import {prisonCatalog,catalogId,startCraft,advanceCraftTime,setProjectActive,installCatalog} from '../src/domain/prison-catalog.js';
 import {createItem} from '../src/domain/items.js';
 import {createPrisonCharacter,awardStoryXP,levelUp,levelFromXP} from '../src/domain/prison-progression.js';
-import {moveWithPath} from '../src/domain/movement-action.js';
+import {moveWithPath,movementPolicy} from '../src/domain/movement-action.js';
 import {applyFall,jump} from '../src/domain/prison-movement.js';
 import {damageBarrier,barrierImpact,toggleDoor} from '../src/domain/prison-barriers.js';
 import {vision,rememberVision,tokenVisible} from '../src/domain/visibility.js';
@@ -59,7 +59,7 @@ test('несколько боёв: переключение не обновля�
  let c=fixture(5);c=battle(c,[0,1]);const first=c.encounter!.id;c=setResource(c,ids(c)[0],'ap_max',2);c=battle(c,[2,3]);const second=c.encounter!.id;
  expect(c.otherEncounters).toHaveLength(1);c=selectEncounter(c,first);expect(c.characters[0].resources.ap_max).toBe(2);expect(selectEncounter(c,second).characters[2].resources.ap_max).toBe(8);
  const before=c.characters[4].resources.ap_max;c=moveWithPath(c,c.tokens[4].id,5,2,true).campaign;expect(c.characters[4].resources.ap_max).toBe(before);
- expect(()=>moveWithPath(c,c.tokens[2].id,3,2,true)).toThrow('ход');expect(parseCampaign(JSON.parse(JSON.stringify(c)))).toEqual(c);
+ expect(()=>moveWithPath(c,c.tokens[2].id,3,2,true)).toThrow('другом бою');expect(parseCampaign(JSON.parse(JSON.stringify(c)))).toEqual(c);
 });
 test('вступивший после своей позиции ждёт раунд; выход/возврат не даёт новый текущий ход',()=>{
  let c=battle(fixture(3));const newcomer=ids(c)[2];c=joinEncounter(c,newcomer,30);expect(c.encounter!.participants.find(p=>p.characterId===newcomer)?.availableRound).toBe(2);expect(c.encounter!.participants[c.encounter!.turnIndex].characterId).toBe(ids(c)[0]);
@@ -128,4 +128,21 @@ test('дополнительные ячейки мешка не обходят �
  c={...c,items:[bag,...Array.from({length:5},()=>{const i=createItem(heavy,id);return {...i,template:{...i.template,mechanics:{...i.template.mechanics!,weight:6}}};})]};
  expect(carrySummary(c,id).weight).toBeLessThan(carrySummary(c,id).limit);expect(carrySummary(c,id).valid).toBe(false);
  c={...c,items:c.items.map((item,index)=>index===5?{...item,template:{...item.template,mechanics:{...item.template.mechanics!,weight:4}}}:item)};expect(carrySummary(c,id).valid).toBe(true);
+});
+
+test('исследование не ограничивается 8 ОД даже в старом сохранении с ручным режимом и нулём ОД',()=>{
+ let c=fixture(1);c={...c,maps:c.maps.map(m=>({...m,width:4000})),session:{started:true,tacticalMovement:true}};c=setResource(c,ids(c)[0],'ap_max',0);
+ expect(movementPolicy(c,ids(c)[0]).spend).toBe(false);
+ const moved=moveWithPath(c,c.tokens[0].id,20,1,true);expect(moved.cost).toBe(19);expect(moved.campaign.tokens[0].column).toBe(20);expect(moved.campaign.characters[0].resources.ap_max).toBe(0);
+});
+test('ОД ограничивают только участника боя, а завершение возвращает свободное движение без лечения ресурсов',()=>{
+ let c=fixture(3);c={...c,maps:c.maps.map(m=>({...m,width:4000})),session:{started:true,tacticalMovement:true}};c=battle(c);expect(movementPolicy(c,ids(c)[0]).spend).toBe(true);expect(movementPolicy(c,ids(c)[1]).canMove).toBe(false);
+ c=moveWithPath(c,c.tokens[0].id,1,2,false).campaign;expect(c.characters[0].resources.ap_max).toBe(7);expect(()=>moveWithPath(c,c.tokens[0].id,20,2,false)).toThrow('ОД');
+ const before=c.characters[2].resources.ap_max;c=moveWithPath(c,c.tokens[2].id,20,3,true).campaign;expect(c.characters[2].resources.ap_max).toBe(before);
+ c=endEncounter(c);expect(c.session.tacticalMovement).toBe(false);const ap=c.characters[0].resources.ap_max;c=moveWithPath(c,c.tokens[0].id,20,2,true).campaign;expect(c.characters[0].resources.ap_max).toBe(ap);
+});
+
+test('политика игрового экрана не включает ручной расход из старого файла legacy',()=>{
+ let c=fixture(1);c={...c,maps:c.maps.map(m=>({...m,width:4000})),gameplay:{...c.gameplay,rulesVersion:'legacy'},session:{started:true,tacticalMovement:true}};c=setResource(c,ids(c)[0],'ap_max',0);
+ expect(movementPolicy(c,ids(c)[0]).spend).toBe(false);const moved=moveWithPath(c,c.tokens[0].id,20,1,false);expect(moved.campaign.characters[0].resources.ap_max).toBe(0);expect(moved.campaign.tokens[0].column).toBe(20);
 });
