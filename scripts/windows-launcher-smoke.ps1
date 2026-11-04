@@ -27,9 +27,13 @@ function Test-Launch($name, $installed, $noNode, $failCommand, $expectedExit, $e
     $env:PRISON_LAUNCH_TEST_FAIL = $failCommand
     if ($noNode) { $env:PATH = "$env:SystemRoot\System32" }
     else { $env:PATH = "$bin;$originalPath" }
-    $command = '""{0}" <nul"' -f (Join-Path $dir 'Start.cmd')
-    & $env:ComSpec /d /c $command
-    $code = $LASTEXITCODE
+    Push-Location $dir
+    try {
+        & $env:ComSpec /d /c 'Start.cmd <nul'
+        $code = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
     $env:PATH = $originalPath
     if ($code -ne $expectedExit) { throw "$name exit $code, expected $expectedExit" }
     $calls = Join-Path $dir 'calls.log'
