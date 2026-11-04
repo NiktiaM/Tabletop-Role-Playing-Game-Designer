@@ -1,3 +1,4 @@
+import {SkillEditor} from './SkillEditor.js';
 import {carrySummary} from '../domain/prison-inventory.js';
 import {condition} from '../domain/prison-state.js';
 import {BACKGROUNDS} from '../domain/prison-progression.js';
@@ -11,7 +12,7 @@ import {resourceBudget} from '../domain/resources.js';
 import {movementPolicy} from '../domain/movement-action.js';
 
 type ResourceChange=(id:string,key:string,value:number|null)=>boolean;
-export function CharacterCard({campaign,character,onResource,onClose,onValues,onAddStats,onActions}:{campaign:Campaign;character:Character;onResource:ResourceChange;onClose:()=>void;onValues:(id:string,values:Record<string,number>)=>boolean;onAddStats:()=>void;onActions:(id:string)=>void}){
+export function CharacterCard({campaign,character,onResource,onClose,onValues,onAddStats,onActions,onSkills}:{onSkills:(id:string,skills:string[])=>boolean;campaign:Campaign;character:Character;onResource:ResourceChange;onClose:()=>void;onValues:(id:string,values:Record<string,number>)=>boolean;onAddStats:()=>void;onActions:(id:string)=>void}){
  const [editing,setEditing]=useState(false),[section,setSection]=useState('overview');
  useEffect(()=>{setSection('overview');setEditing(false);},[character.id]);
  const policy=movementPolicy(campaign,character.id);
@@ -24,12 +25,13 @@ export function CharacterCard({campaign,character,onResource,onClose,onValues,on
  <p className={`character-mode ${policy.battle?'in-combat':'exploring'}`}>{policy.reason??(policy.battle?`Ваш ход · ${policy.battle.name??'Бой'}`:'Вне боя · движение без лимита ОД')}</p>
  <div className="card-quick-resources">{([[campaign.ruleset.healthStat,'HP'],[policy.battle?campaign.ruleset.movement.budgetStat:null,'ОД']] as const).map(([key,label])=>{if(!key)return null;try{const v=resourceBudget(campaign,character,key);return <strong key={label}>{label} {Number(v.remaining.toFixed(3))}/{v.maximum}</strong>;}catch{return null;}})}</div>
  <button className="card-primary-action" onClick={()=>onActions(character.id)}>Действия / выбрать целью</button>
- <nav className="card-sections" aria-label="Раздел карточки">{[['overview','Обзор'],['inventory',`Вещи (${items.length})`],['abilities',`Способности (${abilities.length})`],['master','Мастер']].map(([id,label])=><button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}</nav><div className="card-content">
+ <nav className="card-sections" aria-label="Раздел карточки">{[['overview','Обзор'],['inventory',`Вещи (${items.length})`],['skills','Навыки'],...(campaign.gameplay.abilitiesEnabled?[["abilities",`Способности (${abilities.length})`]]:[]),['master','Мастер']].map(([id,label])=><button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}</nav><div className="card-content">
  {section==='overview'&&<>
  <LevelSummary character={character} rules={campaign.ruleset}/>
  <h4>Характеристики</h4>{error&&<p role="alert">{error}</p>}<dl>{stats.filter(stat=>['strength','dexterity','constitution','charisma'].includes(stat.key)).map(stat=><div key={stat.key}><dt>{stat.name}</dt><dd>{stat.value}</dd></div>)}</dl>
  {campaign.gameplay.rulesVersion==='prison03'&&<><h4>Профиль и состояния</h4><p>{BACKGROUNDS.find(b=>b.id===character.prisonProfile?.background)?.name??'Предыстория не назначена'}</p><p>Навыки: {character.prisonProfile?.skills.join(', ')||'не назначены'}</p><p>{condition(campaign,character.id).bleeding?'Кровотечение · ':''}{condition(campaign,character.id).stunned?'Оглушён · ':''}{condition(campaign,character.id).grappledBy?'В захвате':''}</p>{(()=>{try{const v=carrySummary(campaign,character.id);return <p>Переноска: {v.weight.toFixed(1)}/{v.limit}кг; мелочи {v.slots}/{v.capacity}; руки {v.hands}/2{v.valid?'':' · превышены возможности переноски'}</p>;}catch{return null;}})()}</>}
  </>}
+ {section==='skills'&&<SkillEditor character={character} onSave={skills=>onSkills(character.id,skills)}/>}
  {section==='inventory'&&<>
  <h4>Инвентарь ({items.length})</h4>{items.map(item=><article key={item.id}>{item.template.image&&<img className="item-photo" src={item.template.image} alt=""/>}<strong>{item.template.name}</strong><p>Прочность {item.durability}/{item.template.maxDurability} · заряды {item.charges}/{item.template.maxCharges}{item.equipped?' · экипирован':''}</p></article>)}{!items.length&&<p>Инвентарь пуст.</p>}
  </>}{section==='abilities'&&<>

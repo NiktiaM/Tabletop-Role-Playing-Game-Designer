@@ -20,7 +20,7 @@ test('инициатива D&D бросается один раз на перс�
  const battle=startAutomaticEncounter(source,[a.id,b.id],'manual',()=>[9,19][i++]);
  expect(battle.encounter?.participants.map(p=>p.initiative)).toEqual([17,12]);expect(battle.encounter?.participants[0].characterId).toBe(b.id);expect(battle.diceRolls.map(r=>r.rolls[0])).toEqual([10,20]);
  expect(nextTurn(nextTurn(battle)).diceRolls).toEqual(battle.diceRolls);expect(parseCampaign(JSON.parse(JSON.stringify(battle)))).toEqual(battle);expect(source).toEqual(before);
- expect(()=>startAutomaticEncounter(source,[a.id,a.id],'turn')).toThrow();expect(()=>startAutomaticEncounter({...source,ruleset:{...c.ruleset,initiativeStat:null}},[a.id],'turn')).toThrow();
+ expect(()=>startAutomaticEncounter(source,[a.id,a.id],'turn')).toThrow();expect(()=>startAutomaticEncounter({...source,ruleset:{...c.ruleset,initiativeStat:null}},[a.id],'turn')).not.toThrow();
 });
 test('описание принимает одно расстояние с единицами, не выдумывает масштаб картинки',()=>{
  expect(distanceFromDescription('Коридор длиной 12,5 м')).toBe(12.5);expect(distanceFromDescription('Отрезок 250 см')).toBe(2.5);expect(distanceFromDescription('Улица 1 km')).toBe(1000);expect(distanceFromDescription('10 ft')).toBeCloseTo(3.048);

@@ -14,7 +14,7 @@ export function Library({title,subtitle,count,actions,tools,list,children,classN
   <div className="library-workspace"><aside className="library-browser" aria-label={`Список: ${title}`}><div className="library-tools">{tools}</div><nav ref={browser} className="library-list" aria-label={`Записи: ${title}`}>{list}</nav></aside><div ref={detail} className="library-detail" aria-label={`Карточка: ${title}`}>{children}</div></div>
  </section>;
 }
-export function LibraryEntry({id,name,meta,image,selected,onSelect}:{id:string;name:string;meta:string;image?:string|null;selected:boolean;onSelect:()=>void}){
- return <button type="button" className="library-entry" data-entry={id} aria-pressed={selected} onClick={onSelect}>{image?<img src={image} alt=""/>:<span className="library-avatar" aria-hidden="true">{name.slice(0,1)}</span>}<span className="library-entry-text"><strong>{name}</strong><small>{meta}</small></span><span className="library-chevron" aria-hidden="true">›</span></button>;
+export function LibraryEntry({id,name,meta,image,selected,onSelect,dragId}:{dragId?:string;id:string;name:string;meta:string;image?:string|null;selected:boolean;onSelect:()=>void}){
+ return <button type="button" className="library-entry" draggable={!!dragId} onDragStart={e=>{if(dragId){e.dataTransfer.setData('application/x-prison-character',dragId);e.dataTransfer.effectAllowed='copy';}}} data-entry={id} aria-pressed={selected} onClick={onSelect}>{image?<img src={image} alt=""/>:<span className="library-avatar" aria-hidden="true">{name.slice(0,1)}</span>}<span className="library-entry-text"><strong>{name}</strong><small>{meta}</small></span><span className="library-chevron" aria-hidden="true">›</span></button>;
 }
 export function EmptyLibrary({children}:{children:React.ReactNode}){return <div className="library-empty">{children}</div>;}

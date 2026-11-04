@@ -1,13 +1,13 @@
 name: Windows launcher smoke
 on:
   push:
-    branches: [prison-0.5.1-launcher]
+    branches: [prison-0.5.1-launcher, prison-0.6-editor]
 permissions:
   contents: read
 jobs:
   launcher:
     runs-on: windows-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,3 +16,21 @@ jobs:
       - name: Verify CMD startup paths
         shell: pwsh
         run: ./scripts/windows-launcher-smoke.ps1
+      - name: Install application dependencies
+        run: npm ci
+      - name: Domain checks
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Electron gameplay on Windows
+        run: node scripts/prison03-smoke.mjs
+      - name: Editor, rooms and dice on Windows
+        run: node scripts/editor06-smoke.mjs
+      - name: Save Windows UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ui-screenshots
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 3

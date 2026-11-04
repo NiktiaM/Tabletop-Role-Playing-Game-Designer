@@ -34,7 +34,7 @@ test('новая партия использует книгу0.3, создани
 });
 test('сохранение17 мигрирует без молчаливого пересчёта; явное применение сохраняет текущие и индивидуальныеHPNPC',()=>{
  let old=legacyCampaign('Старый');const base=fixture(2);old={...old,characters:base.characters.map((ch,i)=>({...ch,kind:i?'npc':'character',resources:{hp_max:7,ap_max:3}}))};
- const loaded=parseCampaign({...old,schemaVersion:17});expect(loaded.gameplay.rulesVersion).toBe('legacy');expect(loaded.schemaVersion).toBe(18);
+ const loaded=parseCampaign({...old,schemaVersion:17});expect(loaded.gameplay.rulesVersion).toBe('legacy');expect(loaded.schemaVersion).toBe(19);
  const maximum=health(loaded,loaded.characters[1].id).maximum,next=applyPrisonRules(loaded);expect(health(next,next.characters[0].id).remaining).toBe(7);expect(health(next,next.characters[1].id).maximum).toBe(maximum);expect(next.characters[0].resources.ap_max).toBe(3);
 });
 test('атака: предпросмотр, равенство, применение один раз и отклонение устаревшего расчёта',()=>{

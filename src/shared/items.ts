@@ -9,7 +9,7 @@ mechanics:mechanicsSchema.optional(), image:portraitSchema.nullable().default(nu
  maxDurability:z.number().int().min(0).max(100000),maxCharges:z.number().int().min(0).max(100000),
 }).strict();
 export const itemInstanceSchema=z.object({
- ground:z.object({mapId:z.uuid(),column:z.number().int().min(-100000).max(100000),row:z.number().int().min(-100000).max(100000)}).strict().nullable().default(null),
+ ground:z.object({mapId:z.uuid(),column:z.number().finite().min(-100000).max(100000),row:z.number().finite().min(-100000).max(100000)}).strict().nullable().default(null),
  id:z.uuid(),ownerId:z.uuid().nullable(),template:itemTemplateSchema,durability:z.number().int().min(0),charges:z.number().int().min(0),equipped:z.boolean(),
 }).strict().superRefine((item,ctx)=>{
  if(item.durability>item.template.maxDurability||item.charges>item.template.maxCharges)ctx.addIssue({code:'custom',message:'Прочность или заряды превышают максимум экземпляра'});

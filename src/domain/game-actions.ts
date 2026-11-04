@@ -17,7 +17,7 @@ export function tickEffects(c:Campaign,id:string){if(!isPrison(c)||!c.ruleset.he
 export function calculateAttack(c:Campaign,i:AttackInput,r:DiceRoll[]){return isPrison(c)?calculatePrisonAttack(c,i,r):legacy.calculateAttack(c,i,r);}
 export function previewAttack(c:Campaign,i:AttackInput,r?:RandomSource){return isPrison(c)?previewPrisonAttack(c,i,r):legacy.previewAttack(c,i,r);}
 export function applyAttack(c:Campaign){return isPrison(c)?applyPrisonAttack(c):legacy.applyAttack(c);}
-export function useAbility(c:Campaign,id:string,targetId:string,r?:RandomSource){return isPrison(c)?usePrisonAbility(c,id,targetId,r):legacy.useAbility(c,id,targetId,r);}
+export function useAbility(c:Campaign,id:string,targetId:string,r?:RandomSource){if(!c.gameplay.abilitiesEnabled)throw new Error('Способности отключены в настройках партии');return isPrison(c)?usePrisonAbility(c,id,targetId,r):legacy.useAbility(c,id,targetId,r);}
 export function useItem(c:Campaign,id:string,targetId:string,r?:RandomSource){return isPrison(c)?usePrisonItem(c,id,targetId,r):legacy.useItem(c,id,targetId,r);}
 export function pickupItem(c:Campaign,itemId:string,id:string){return isPrison(c)?pickupPrisonItem(c,itemId,id):legacy.pickupItem(c,itemId,id);}
 export const breakWall=legacy.breakWall;

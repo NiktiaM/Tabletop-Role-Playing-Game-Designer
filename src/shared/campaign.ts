@@ -24,6 +24,9 @@ export const gridSchema = z.object({
   locationKind: z.enum(['custom','house','forest']).default('custom'),
   cellSizePx: z.number().finite().min(4).max(4096),
   originPx: z.object({ x: z.number().finite().min(-8192).max(8192), y: z.number().finite().min(-8192).max(8192) }).strict(),
+  navigationStep:z.number().positive().max(1).optional(),
+  regions:z.array(z.object({mapId:z.uuid(),x:z.number().nonnegative(),y:z.number().nonnegative(),width:z.number().positive(),height:z.number().positive(),cellSizePx:z.number().positive()}).strict()).max(20).optional(),
+  bounds:z.object({width:z.number().positive().max(8192),height:z.number().positive().max(8192)}).strict().optional(),
   visible: z.boolean(),
 }).strict();
 export const defaultGrid = () => ({ metersPerCell:1, locationKind:'custom' as const, cellSizePx: 64, originPx: { x: 0, y: 0 }, visible: false });
@@ -31,6 +34,7 @@ export type Grid = z.infer<typeof gridSchema>;
 export const mapSchema = z.object({
   id: z.uuid(), name: z.string().trim().min(1).max(120),
   width: z.number().int().positive().max(8192), height: z.number().int().positive().max(8192),
+  placement:z.object({parentId:z.uuid(),x:z.number().nonnegative(),y:z.number().nonnegative(),width:z.number().positive(),height:z.number().positive()}).strict().optional(),
   grid: gridSchema.default(defaultGrid),
   annotations:z.array(annotationSchema).max(500).default([]),
   image: z.string().max(21 * 1024 * 1024).regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/),
@@ -49,11 +53,11 @@ export const characterSchema = z.object({prisonProfile:profileSchema.optional(),
  footprint:z.object({width:z.number().int().min(1).max(10),height:z.number().int().min(1).max(10)}).strict(),
  portrait:portraitSchema.nullable(),
 }).strict();
-export const tokenSchema = z.object({rotation:z.union([z.literal(0),z.literal(90)]).optional(),id:z.uuid(),mapId:z.uuid(),characterId:z.uuid(),column:z.number().int().min(-8192).max(8192),row:z.number().int().min(-8192).max(8192)}).strict();
+export const tokenSchema = z.object({rotation:z.union([z.literal(0),z.literal(90)]).optional(),id:z.uuid(),mapId:z.uuid(),characterId:z.uuid(),column:z.number().finite().min(-8192).max(8192),row:z.number().finite().min(-8192).max(8192)}).strict();
 export type Character = z.infer<typeof characterSchema>;
 export type Token = z.infer<typeof tokenSchema>;
 export const campaignSchema = z.object({
-  ...metadata, schemaVersion: z.literal(18),prison:prisonSchema.default(()=>prisonSchema.parse({})),otherEncounters:z.array(encounterSchema).max(50).default([]),gameplay:gameplaySchema.default(()=>gameplaySchema.parse({})),effects:z.array(effectSchema).max(1000).default([]),pendingAttack:pendingAttackSchema.nullable().default(null),xpAwards:z.array(awardSchema).max(2000).default([]),events:z.array(eventSchema).max(500).default([]),diceRolls:z.array(diceRollSchema).max(200).default([]),encounter:encounterSchema.nullable().default(null),session:z.object({started:z.boolean(),tacticalMovement:z.boolean()}).strict().refine(session=>!session.tacticalMovement||session.started,'Тактическое движение доступно только в начатой игре').default({started:false,tacticalMovement:false}), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
+  ...metadata, schemaVersion: z.literal(19),prison:prisonSchema.default(()=>prisonSchema.parse({})),otherEncounters:z.array(encounterSchema).max(50).default([]),gameplay:gameplaySchema.default(()=>gameplaySchema.parse({})),effects:z.array(effectSchema).max(1000).default([]),pendingAttack:pendingAttackSchema.nullable().default(null),xpAwards:z.array(awardSchema).max(2000).default([]),events:z.array(eventSchema).max(500).default([]),diceRolls:z.array(diceRollSchema).max(200).default([]),encounter:encounterSchema.nullable().default(null),session:z.object({started:z.boolean(),tacticalMovement:z.boolean()}).strict().refine(session=>!session.tacticalMovement||session.started,'Тактическое движение доступно только в начатой игре').default({started:false,tacticalMovement:false}), abilityTemplates:z.array(abilitySchema).max(200).default([]), abilities:z.array(assignedAbilitySchema).max(1000).default([]), itemTemplates:z.array(itemTemplateSchema).max(200).default([]), items:z.array(itemInstanceSchema).max(1000).default([]), ruleset:rulesetSchema.default(emptyRuleset), characters:z.array(characterSchema).max(200).default([]), tokens:z.array(tokenSchema).max(500).default([]), maps: z.array(mapSchema).max(20),
   view: z.object({ activeMapId: z.uuid().nullable(), cameras: z.record(z.uuid(), cameraSchema) }).strict(),
 }).strict().superRefine((c, ctx) => {
   if(new Set(c.diceRolls.map(roll=>roll.id)).size!==c.diceRolls.length)ctx.addIssue({code:'custom',message:'Повторяющиеся броски'});
@@ -90,21 +94,22 @@ export const campaignSchema = z.object({
     }
   }
 
+  for(const map of c.maps){let current=map;const seen=new Set([map.id]);while(current.placement){const p=current.placement,parent=c.maps.find(m=>m.id===p.parentId);if(!parent||seen.has(parent.id)){ctx.addIssue({code:'custom',message:'Некорректная ссылка или цикл комнат'});break;}if(p.x+p.width>parent.width+.001||p.y+p.height>parent.height+.001)ctx.addIssue({code:'custom',message:'Комната за границами основной карты'});seen.add(parent.id);current=parent;}}
   if (ids.size !== c.maps.length || (c.view.activeMapId !== null && !ids.has(c.view.activeMapId)) || Object.keys(c.view.cameras).some(id => !ids.has(id)))
     ctx.addIssue({ code: 'custom', message: 'Некорректные ссылки на карты' });
 });
 const legacySchema = z.object({ ...metadata, schemaVersion: z.literal(1) }).strict();
 export function parseCampaign(input: unknown): Campaign {
   if (typeof input === 'object' && input !== null && 'schemaVersion' in input && input.schemaVersion === 1) {
-    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 18, maps: [], view: { activeMapId: null, cameras: {} } });
+    return campaignSchema.parse({ ...legacySchema.parse(input), schemaVersion: 19, maps: [], view: { activeMapId: null, cameras: {} } });
   }
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9 || input.schemaVersion === 10 || input.schemaVersion === 11 || input.schemaVersion === 12 || input.schemaVersion === 13 || input.schemaVersion === 14 || input.schemaVersion === 15 || input.schemaVersion === 16 || input.schemaVersion === 17)) {
+  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input.schemaVersion === 2 || input.schemaVersion === 3 || input.schemaVersion === 4 || input.schemaVersion === 5 || input.schemaVersion === 6 || input.schemaVersion === 7 || input.schemaVersion === 8 || input.schemaVersion === 9 || input.schemaVersion === 10 || input.schemaVersion === 11 || input.schemaVersion === 12 || input.schemaVersion === 13 || input.schemaVersion === 14 || input.schemaVersion === 15 || input.schemaVersion === 16 || input.schemaVersion === 17 || input.schemaVersion === 18)) {
     let rules=input&&typeof input==='object'&&'ruleset' in input?input.ruleset:undefined;
     if(rules&&typeof rules==='object'&&!('movement' in rules)){
       const checked=rulesetSchema.parse(rules),preset=rPrisonLegacyDraft(),known=preset.stats.find(stat=>stat.key===preset.movement.budgetStat);
       if(known?.kind==='derived'&&checked.stats.some(stat=>stat.key===known.key&&stat.kind==='derived'&&stat.formula.replace(/\s+/g,'')===known.formula.replace(/\s+/g,'')))rules={...checked,movement:preset.movement};
     }
-    return campaignSchema.parse({ ...input, ...(rules?{ruleset:rules}:{}), schemaVersion: 18 });
+    return campaignSchema.parse({ ...input, ...(rules?{ruleset:rules}:{}), schemaVersion: 19 });
   }
   return campaignSchema.parse(input);
 }
@@ -124,5 +129,5 @@ export interface CampaignAPI {
 }
 export function createCampaign(name: string): Campaign {
   const now = new Date().toISOString();
-  return campaignSchema.parse({ schemaVersion: 18, ruleset:rPrisonDraft(),itemTemplates:prisonCatalog(),gameplay:{rulesVersion:'prison03',armorAbsorbs:true,noReactionHits:false,dodgeCost:0,blockCost:0,counterCost:0,rangedDistanceUnit:'meters'}, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
+  return campaignSchema.parse({ schemaVersion: 19, ruleset:rPrisonDraft(),itemTemplates:prisonCatalog(),gameplay:{abilitiesEnabled:false,sharedStashEnabled:false,rulesVersion:'prison03',armorAbsorbs:true,noReactionHits:false,dodgeCost:0,blockCost:0,counterCost:0,rangedDistanceUnit:'meters'}, id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, maps: [], view: { activeMapId: null, cameras: {} } });
 }

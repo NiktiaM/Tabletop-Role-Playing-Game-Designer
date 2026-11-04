@@ -4,6 +4,7 @@ export interface Footprint { width: number; height: number }
 export interface Cell { column: number; row: number }
 export function footprintFits(map: {width:number;height:number;grid:Grid}, cell: Cell, footprint: Footprint): boolean {
   const p=cellOrigin(cell.column,cell.row,map.grid), size=map.grid.cellSizePx;
+
   return p.x>=-1e-7 && p.y>=-1e-7 && p.x+footprint.width*size<=map.width+1e-7 && p.y+footprint.height*size<=map.height+1e-7;
 }
 export function footprintsOverlap(a: Cell, aSize: Footprint, b: Cell, bSize: Footprint): boolean {

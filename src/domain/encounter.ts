@@ -1,3 +1,4 @@
+import {effectiveStats} from './effective-stats.js';
 import {advanceCraftTime} from './prison-catalog.js';
 import {isPrison,battles,battleFor,condition,enterPrisonTurn,advanceTime,health,setCondition,notice} from './prison-state.js';
 import {tickEffects,preserveResources} from './game-actions.js';
@@ -25,7 +26,7 @@ export function startEncounter(campaign:Campaign,participants:Participant[],reco
  if(!checked.success)throw new Error('Выберите от 1 до 200 разных участников и задайте конечную инициативу от −1000000 до 1000000; выберите режим восстановления ОД');
  const encounter=checked.data;
  for(const row of encounter.participants){const character=campaign.characters.find(character=>character.id===row.characterId);if(!character)throw new Error('Участник не найден');resourceBudget(campaign,character,apStat);}
- if(sort)encounter.participants.sort((a,b)=>b.initiative-a.initiative||(isPrison(campaign)?((campaign.characters.find(c=>c.id===b.characterId)?.values.dexterity??5)-(campaign.characters.find(c=>c.id===a.characterId)?.values.dexterity??5)):0));
+ if(sort)encounter.participants.sort((a,b)=>b.initiative-a.initiative||(isPrison(campaign)?((effectiveStats(campaign,campaign.characters.find(c=>c.id===b.characterId)!).find(s=>s.key==='dexterity')?.value??campaign.characters.find(c=>c.id===b.characterId)?.values.dexterity??5)-(effectiveStats(campaign,campaign.characters.find(c=>c.id===a.characterId)!).find(s=>s.key==='dexterity')?.value??campaign.characters.find(c=>c.id===a.characterId)?.values.dexterity??5)):0)||(b.tieBreaker??0)-(a.tieBreaker??0));
  if(campaign.gameplay.skipDefeatedTurns&&campaign.ruleset.healthStat){const index=encounter.participants.findIndex(p=>resourceBudget(campaign,campaign.characters.find(ch=>ch.id===p.characterId)!,campaign.ruleset.healthStat!).remaining>0);if(index<0)throw new Error('Нет участников с положительными HP');encounter.turnIndex=index;}
  const started=campaignSchema.parse({...campaign,otherEncounters:isPrison(campaign)&&campaign.encounter?[...campaign.otherEncounters,campaign.encounter]:campaign.otherEncounters,session:{...campaign.session,tacticalMovement:true},encounter});
  return isPrison(started)?campaignSchema.parse(enterPrisonTurn({...started,prison:{...started.prison,projects:started.prison.projects.map(p=>participants.some(x=>x.characterId===p.ownerId)?{...p,active:false}:p)}})):enterTurn(started,true);

@@ -3,8 +3,9 @@ import {terrainSchema} from '../shared/gameplay.js';
 import type {GameMap,Character,Token} from '../shared/campaign.js';
 import {cellOrigin,type Point} from './grid.js';
 import {footprintFits,footprintsOverlap,tokenSize,type Cell} from './tokens.js';
-export interface MovementOptions {mode:'meters'|'cells';diagonal:boolean;prison?:boolean;freeHands?:number;terrain?:ReturnType<typeof terrainSchema.parse>}
-const key=(cell:Cell)=>`${cell.column},${cell.row}`;
+export interface MovementOptions {mode:'meters'|'cells';diagonal:boolean;prison?:boolean;freeHands?:number;terrain?:ReturnType<typeof terrainSchema.parse>;target?:Cell}
+const rounded=(n:number)=>Math.round(n*1e6)/1e6;
+const key=(cell:Cell)=>`${rounded(cell.column)},${rounded(cell.row)}`;
 const cross=(a:Point,b:Point,c:Point)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
 export function hull(points:Point[]):Point[]{
  const sorted=[...points].sort((a,b)=>a.x-b.x||a.y-b.y),lower:Point[]=[],upper:Point[]=[];
@@ -38,19 +39,22 @@ export function stepAllowed(map:GameMap,from:Cell,to:Cell,character:Character,to
  return !map.annotations.some(item=>item.kind==='wall'&&!item.open&&Math.max(item.from.x,item.to.x)>left&&Math.min(item.from.x,item.to.x)<right&&Math.max(item.from.y,item.to.y)>=top&&Math.min(item.from.y,item.to.y)<=bottom&&wallInsideHull(item.from,item.to,swept));
 }
 class Heap {
- data:{cell:Cell;cost:number}[]=[];
- push(value:{cell:Cell;cost:number}){this.data.push(value);let i=this.data.length-1;while(i>0){const p=Math.floor((i-1)/2);if(this.data[p].cost<=value.cost)break;this.data[i]=this.data[p];i=p;}this.data[i]=value;}
- pop(){const first=this.data[0],last=this.data.pop()!;if(this.data.length){let i=0;while(2*i+1<this.data.length){let next=2*i+1;if(next+1<this.data.length&&this.data[next+1].cost<this.data[next].cost)next++;if(this.data[next].cost>=last.cost)break;this.data[i]=this.data[next];i=next;}this.data[i]=last;}return first;}
+ data:{cell:Cell;cost:number;priority:number}[]=[];
+ push(value:{cell:Cell;cost:number;priority?:number}){const v={...value,priority:value.priority??value.cost};this.data.push(v);let i=this.data.length-1;while(i>0){const p=Math.floor((i-1)/2);if(this.data[p].priority<=v.priority)break;this.data[i]=this.data[p];i=p;}this.data[i]=v;}
+ pop(){const first=this.data[0],last=this.data.pop()!;if(this.data.length){let i=0;while(2*i+1<this.data.length){let next=2*i+1;if(next+1<this.data.length&&this.data[next+1].priority<this.data[next].priority)next++;if(this.data[next].priority>=last.priority)break;this.data[i]=this.data[next];i=next;}this.data[i]=last;}return first;}
 }
+
 export interface Reachable {cells:Map<string,{cell:Cell;cost:number;previous:string|null}>;limited:boolean}
 export function reachable(map:GameMap,token:Token,characters:Character[],tokens:Token[],budget:number,options:MovementOptions,maxCells=20000):Reachable{
  if(!Number.isFinite(budget)||budget<0)throw new Error('Бюджет должен быть конечным неотрицательным числом');
  const character=characters.find(c=>c.id===token.characterId);if(!character)throw new Error('Персонаж не найден');
  const cells:Reachable['cells']=new Map([[key(token),{cell:{column:token.column,row:token.row},cost:0,previous:null}]]),heap=new Heap();heap.push({cell:token,cost:0});
- const directions=[[1,0],[-1,0],[0,1],[0,-1],...(options.diagonal?[[1,1],[1,-1],[-1,1],[-1,-1]]:[])];let limited=false;
+ const quantum=map.grid.navigationStep??1,goal=options.target,heuristic=(cell:Cell)=>goal?(options.mode==='meters'?Math.hypot(goal.column-cell.column,goal.row-cell.row)*map.grid.metersPerCell:Math.max(Math.abs(goal.column-cell.column),Math.abs(goal.row-cell.row))):0;
+ const directions=[[1,0],[-1,0],[0,1],[0,-1],...(options.diagonal?[[1,1],[1,-1],[-1,1],[-1,-1]]:[])].map(([x,y])=>[x*quantum,y*quantum]);let limited=false;
  const terrainCache=new Map<string,ReturnType<typeof terrainAt>>();const sample=(cell:Cell)=>{const id=key(cell),cached=terrainCache.get(id);if(cached)return cached;const value=terrainAt(map,cell,tokenSize(character,token));terrainCache.set(id,value);return value;};
- while(heap.data.length){const current=heap.pop();if(current.cost>cells.get(key(current.cell))!.cost+1e-9)continue;
-  for(const [dx,dy] of directions){const cell={column:current.cell.column+dx,row:current.cell.row+dy};const terrain=options.terrain,fromTerrain=terrain?sample(current.cell):null,toTerrain=terrain?sample(cell):null;const horizontal=options.mode==='cells'?1:map.grid.metersPerCell*(dx&&dy?Math.SQRT2:1),height=terrain?Math.abs(toTerrain!.height-fromTerrain!.height):0,travel=toTerrain?.travel??fromTerrain?.travel;const step=options.prison?(travel==='stairs'?Math.hypot(horizontal,height):horizontal+height*(travel==='ladder'?1:2))*(toTerrain?.rough||toTerrain?.liquid?2:1):horizontal*(toTerrain?.liquid?terrain!.liquidMultiplier:1)+(terrain?Math.max(0,toTerrain!.height-fromTerrain!.height)*terrain.climbCost:0);const cost=current.cost+step;if(options.prison&&height>.5&&(options.freeHands??2)<(travel==='stairs'?0:travel==='ladder'?1:2))continue;if(cost>budget+1e-9)continue;const old=cells.get(key(cell));if(old&&old.cost<=cost+1e-9)continue;if(!stepAllowed(map,current.cell,cell,character,token,tokens,characters,options.prison))continue;if(!old&&cells.size>=maxCells){limited=true;continue;}cells.set(key(cell),{cell,cost,previous:key(current.cell)});heap.push({cell,cost});}
+ while(heap.data.length){const current=heap.pop();if(current.cost>cells.get(key(current.cell))!.cost+1e-9)continue;if(goal&&key(current.cell)===key(goal))break;
+  const moves=[...directions];if(goal){const dx=goal.column-current.cell.column,dy=goal.row-current.cell.row;if(Math.abs(dx)<=quantum+1e-7&&Math.abs(dy)<=quantum+1e-7){if(dx)moves.push([dx,0]);if(dy)moves.push([0,dy]);if(options.diagonal)moves.push([dx,dy]);}}
+  for(const [dx,dy] of moves){if(Math.hypot(dx,dy)<1e-7)continue;const cell={column:rounded(current.cell.column+dx),row:rounded(current.cell.row+dy)};const terrain=options.terrain,fromTerrain=terrain?sample(current.cell):null,toTerrain=terrain?sample(cell):null;const horizontal=options.mode==='cells'?Math.max(Math.abs(dx),Math.abs(dy)):Math.hypot(dx,dy)*map.grid.metersPerCell,height=terrain?Math.abs(toTerrain!.height-fromTerrain!.height):0,travel=toTerrain?.travel??fromTerrain?.travel;const step=options.prison?(travel==='stairs'?Math.hypot(horizontal,height):horizontal+height*(travel==='ladder'?1:2))*(toTerrain?.rough||toTerrain?.liquid?2:1):horizontal*(toTerrain?.liquid?terrain!.liquidMultiplier:1)+(terrain?Math.max(0,toTerrain!.height-fromTerrain!.height)*terrain.climbCost:0);const cost=current.cost+step;if(options.prison&&height>.5&&(options.freeHands??2)<(travel==='stairs'?0:travel==='ladder'?1:2))continue;if(cost>budget+1e-9)continue;const old=cells.get(key(cell));if(old&&old.cost<=cost+1e-9)continue;if(!stepAllowed(map,current.cell,cell,character,token,tokens,characters,options.prison))continue;if(!old&&cells.size>=maxCells){limited=true;continue;}cells.set(key(cell),{cell,cost,previous:key(current.cell)});heap.push({cell,cost,priority:cost+heuristic(cell)});}
  }
  return {cells,limited};
 }

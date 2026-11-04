@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {statKey} from './rules.js';
 
-export const participantSchema=z.object({surprised:z.boolean().optional(),availableRound:z.number().int().positive().optional(),characterId:z.uuid(),roll:z.number().int().min(1).max(20).optional(),modifier:z.number().int().min(-1000000).max(1000000).optional(),initiative:z.number().finite().min(-1000000).max(1000000)}).strict().refine(row=>(row.roll===undefined&&row.modifier===undefined)||(row.roll!==undefined&&row.modifier!==undefined&&row.initiative===row.roll+row.modifier),'Неверный результат инициативы');
+export const participantSchema=z.object({tieBreaker:z.number().int().min(0).max(200).optional(),surprised:z.boolean().optional(),availableRound:z.number().int().positive().optional(),characterId:z.uuid(),roll:z.number().int().min(1).max(20).optional(),modifier:z.number().int().min(-1000000).max(1000000).optional(),initiative:z.number().finite().min(-1000000).max(1000000)}).strict().refine(row=>(row.roll===undefined&&row.modifier===undefined)||(row.roll!==undefined&&row.modifier!==undefined&&row.initiative===row.roll+row.modifier),'Неверный результат инициативы');
 export const recoverySchema=z.enum(['turn','round','manual']);
 export const encounterSchema=z.object({
  name:z.string().max(120).optional(),startedAt:z.number().nonnegative().optional(),id:z.uuid(),participants:z.array(participantSchema).min(1).max(200),
