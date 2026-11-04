@@ -15,7 +15,8 @@ export function CharacterValues({character,rules,onSave}:{character:Character;ru
  return <section className="character-values"><h3>Характеристики: {character.name}</h3><p className="hint">По правилам партии, версия {rules.revision}. Производные значения рассчитываются автоматически; это не текущие HP или другие расходуемые ресурсы.</p>
 <label>Уровень персонажа<input aria-label={`Уровень: ${character.name}`} type="number" min="1" max="1000" step="1" disabled={derivedLevel} value={derivedLevel?trace.find(stat=>stat.key==='level')?.value??'':inputs.level??''} onChange={event=>setInputs({...inputs,level:event.target.value})}/></label>
  <div className="grid-fields">{rules.stats.filter(stat=>stat.kind==='base'&&stat.key!=='level').map(stat=><label key={stat.key}>Значение: {stat.name}<input type="number" step="any" value={inputs[stat.key]??''} onChange={event=>{setInputs({...inputs,[stat.key]:event.target.value});setNotice('');}}/></label>)}</div>
- {error?<p role="alert">{error}</p>:<ul>{trace.map(row=><li key={row.key}>{row.name}: <strong>{row.value}</strong> — {row.explanation}</li>)}</ul>}
+ {error?<p role="alert">{error}</p>:<><div className="character-summary">{trace.filter(row=>rules.stats.find(stat=>stat.key===row.key)?.kind==='derived').map(row=><span key={row.key}><strong>{row.name}</strong>: {row.value}</span>)}</div><details className="detail-section"><summary>Как рассчитаны показатели</summary><ul>{trace.map(row=><li key={row.key}>{row.name}: <strong>{row.value}</strong> — {row.explanation}</li>)}</ul></details></>}
+
  <button disabled={!!error} onClick={()=>{if(onSave(values))setNotice('Характеристики применены. Сохраните партию.');}}>Применить характеристики</button>{notice&&<p role="status">{notice}</p>}
  </section>;
 }
